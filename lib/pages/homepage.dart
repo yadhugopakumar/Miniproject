@@ -57,7 +57,11 @@ class _HomepageStateContent extends State<Homepage> {
                 padding: const EdgeInsets.only(right: 10.0, top: 5, bottom: 5),
                 child: Container(
                   decoration: BoxDecoration(
-                    color: Color.fromARGB(255, 130, 170, 155),
+                    border: Border.all(
+                      color: Colors.white,
+                      width: 1.5,
+                    ),
+                    color: Color.fromARGB(255, 62, 80, 73),
                     borderRadius: BorderRadius.circular(10),
                   ),
                   padding: const EdgeInsets.all(2),

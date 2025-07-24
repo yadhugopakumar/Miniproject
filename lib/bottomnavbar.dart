@@ -123,7 +123,7 @@ class _BottomnavbarState extends State<Bottomnavbar> {
             color: isSelected
                 ? Color.fromARGB(255, 165, 255, 123)
                 : Colors.transparent),
-        padding: const EdgeInsets.symmetric(horizontal: 2, vertical: 2),
+        padding: const EdgeInsets.symmetric(horizontal: 2, vertical: 5),
         child: Column(
           mainAxisAlignment: MainAxisAlignment.spaceEvenly,
           mainAxisSize: MainAxisSize.min,
