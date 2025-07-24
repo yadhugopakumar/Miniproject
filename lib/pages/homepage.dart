@@ -1,17 +1,16 @@
-
 import 'package:flutter/material.dart';
 
 class Homepage extends StatefulWidget {
   const Homepage({super.key});
 
   @override
-  State<Homepage> createState() => _HomepageStateContent(); // Renamed to avoid conflict
+  State<Homepage> createState() =>
+      _HomepageStateContent(); 
 }
 
-class _HomepageStateContent extends State<Homepage> { // Renamed to avoid conflict
+class _HomepageStateContent extends State<Homepage> {
   final DateTime today = DateTime.now();
 
-  // Removed initState as it contained Hive logic
 
   @override
   Widget build(BuildContext context) {
@@ -29,77 +28,101 @@ class _HomepageStateContent extends State<Homepage> { // Renamed to avoid confli
       {'medicine': 'Vitamin D', 'time': '6:00 PM', 'taken': true},
       {'medicine': 'Melatonin', 'time': '9:00 PM', 'taken': false},
     ];
-
     return Scaffold(
-      appBar: AppBar(
-        title: const Text('MedRemind',
-            style: TextStyle(
-                color: Colors.white,
-                fontSize: 20,
-                fontWeight: FontWeight.bold,
-                letterSpacing: 1.2)),
-        actions: [
-          Padding(
-            padding: const EdgeInsets.only(right: 10.0, top: 5, bottom: 5),
-            child: Container(
-              decoration: BoxDecoration(
-                color: Colors.green[300],
-                borderRadius: BorderRadius.circular(10),
-              ),
-              padding: const EdgeInsets.all(3),
-              child: IconButton(
-                onPressed: () {
-                  print('Profile button pressed!');
-                  // Navigator.push(context, MaterialPageRoute(builder: (_) => Profilepg())), // Removed navigation
-                },
-                icon: const Icon(Icons.person_3_outlined,
-                    color: Colors.white, size: 28),
-              ),
-            ),
-          )
-        ],
-        backgroundColor: Colors.green[800],
-        elevation: 0,
-      ),
       backgroundColor: Colors.white,
-      body: ListView(
-        children: [
-          _buildProgressBar(staticProgress, staticTakenCount, staticTotalDoses),
-          _buildQuickActions(context, backgroundGreen),
-          const Padding(
-            padding: EdgeInsets.only(left: 20.0, bottom: 3, top: 16),
-            child: Text("Today's Schedule",
-                style: TextStyle(
-                    fontSize: 18, fontWeight: FontWeight.bold)),
+      body: CustomScrollView(
+        slivers: [
+          SliverAppBar(
+            pinned: true,
+            expandedHeight: 60.0,
+            backgroundColor: Colors.green[800],
+            elevation: 0,
+            centerTitle: true,
+            flexibleSpace: const FlexibleSpaceBar(
+              centerTitle: false,
+              expandedTitleScale: 1.5,
+              title: Text('MedRemind',
+                  style: TextStyle(
+                      color: Colors.white,
+                      fontSize: 16,
+                      fontWeight: FontWeight.bold,
+                      letterSpacing: 1.2)),
+              titlePadding: const EdgeInsets.only(left: 16, bottom: 16),
+            ),
+            actions: [
+              Padding(
+                padding: const EdgeInsets.only(right: 10.0, top: 5, bottom: 5),
+                child:  Container(
+                  decoration: BoxDecoration(
+                    color: Colors.green[300],
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                  padding: const EdgeInsets.all(3),
+
+                  child: IconButton(
+                    onPressed: () {
+                      print('Profile button pressed!');
+                    },
+                    icon: const Icon(Icons.person_3_outlined,
+                        color: Colors.white, size: 20),
+                  ),
+                ),
+              )
+            ],
+
+            
           ),
-          const SizedBox(height: 10),
-          // Dynamically build schedule tiles from static data
-          ...staticSchedule.map((entry) {
-            return _scheduleTile(
-              context,
-              medicine: entry['medicine'],
-              dose: entry['time'],
-              taken: entry['taken'],
-              backgroundGreen: backgroundGreen,
-              onTap: () {
-                print('Tapped on ${entry['medicine']} - ${entry['time']}');
-                // You can add local state management here if needed for 'taken' status
+          SliverToBoxAdapter(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                _buildProgressBar(
+                    staticProgress, staticTakenCount, staticTotalDoses),
+                _buildQuickActions(context, backgroundGreen),
+                const Padding(
+                  padding: EdgeInsets.only(left: 20.0, bottom: 3, top: 16),
+                  child: Text("Today's Schedule",
+                      style:
+                          TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+                ),
+                const SizedBox(height: 10),
+              ],
+            ),
+          ),
+          SliverList(
+            delegate: SliverChildBuilderDelegate(
+              (context, index) {
+                final entry = staticSchedule[index];
+                return _scheduleTile(
+                  context,
+                  medicine: entry['medicine'],
+                  dose: entry['time'],
+                  taken: entry['taken'],
+                  backgroundGreen: backgroundGreen,
+                  onTap: () {
+                    print('Tapped on ${entry['medicine']} - ${entry['time']}');
+                  },
+                );
               },
-            );
-          }).toList(),
-          const SizedBox(height: 20),
+              childCount: staticSchedule.length,
+            ),
+          ),
+          const SliverToBoxAdapter(child: SizedBox(height: 130)),
         ],
       ),
     );
   }
-
+ 
   Widget _buildProgressBar(double progress, int taken, int total) {
     return Container(
       width: double.infinity,
       padding: const EdgeInsets.only(top: 20, bottom: 10),
       decoration: BoxDecoration(
         gradient: LinearGradient(
-          colors: [Colors.green.shade800!, Colors.green.shade400!], // Added ! for null safety
+          colors: [
+            Colors.green.shade800,
+            Colors.green.shade400
+          ], // Added ! for null safety
           begin: Alignment.topCenter,
           end: Alignment.bottomCenter,
         ),
@@ -141,7 +164,8 @@ class _HomepageStateContent extends State<Homepage> { // Renamed to avoid confli
                       value: progress,
                       strokeWidth: 11,
                       backgroundColor: Colors.white24,
-                      valueColor: const AlwaysStoppedAnimation<Color>(Colors.white),
+                      valueColor:
+                          const AlwaysStoppedAnimation<Color>(Colors.white),
                     ),
                   ),
                 ),
@@ -191,7 +215,7 @@ class _HomepageStateContent extends State<Homepage> { // Renamed to avoid confli
             children: [
               _quickActionCard(
                 context: context,
-                color: Color.fromARGB(255, 71, 72, 94),
+                color: Color.fromARGB(255, 19, 172, 19),
                 icon: Icons.add_alert,
                 label: "Add Medicine",
                 onTap: () {
@@ -201,7 +225,7 @@ class _HomepageStateContent extends State<Homepage> { // Renamed to avoid confli
               ),
               _quickActionCard(
                 context: context,
-                color: Color.fromARGB(255, 194, 123, 43),
+                color: Color.fromARGB(255, 2, 62, 230),
                 icon: Icons.calendar_month_outlined,
                 label: "Calendar View",
                 onTap: () {
@@ -260,7 +284,8 @@ class _HomepageStateContent extends State<Homepage> { // Renamed to avoid confli
     required Color backgroundGreen,
   }) {
     return Card(
-      margin: const EdgeInsets.symmetric(horizontal: 18, vertical: 6), // Added margin for spacing
+      margin: const EdgeInsets.symmetric(
+          horizontal: 18, vertical: 6), 
       child: ListTile(
         leading: Icon(Icons.medical_services, color: backgroundGreen),
         title: Text(medicine,
@@ -282,4 +307,3 @@ class _HomepageStateContent extends State<Homepage> { // Renamed to avoid confli
   }
 }
 
-// Removed formatTime and navigatorKey as they were related to Hive data and navigation

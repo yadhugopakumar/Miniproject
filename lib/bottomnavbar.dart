@@ -23,13 +23,13 @@ class _BottomnavbarState extends State<Bottomnavbar> {
       extendBody: true,
       floatingActionButtonLocation: FloatingActionButtonLocation.centerDocked,
       floatingActionButton: Padding(
-        padding: const EdgeInsets.only(bottom: 19),
+        padding: const EdgeInsets.only(bottom: 9),
         child: Material(
           color: Color.fromARGB(255, 93, 255, 101),
           shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(35),
           ),
-          elevation: 10,
+          elevation: 20,
           child: Container(
             height: 70.0,
             width: 70.0,
@@ -39,7 +39,7 @@ class _BottomnavbarState extends State<Bottomnavbar> {
               child: const Icon(
                 Icons.mic_none_sharp,
                 size: 30,
-                color: Color.fromARGB(255, 233, 63, 63),
+                color: Color.fromARGB(255, 134, 255, 97),
               ),
             ),
           ),
@@ -54,8 +54,12 @@ class _BottomnavbarState extends State<Bottomnavbar> {
           elevation: 10,
           child: Container(
               decoration: BoxDecoration(
-                color: Colors.green,
+                color: Colors.green[900]!.withOpacity(0.8),
                 borderRadius: BorderRadius.circular(15),
+                border: Border.all(
+                  color: Colors.green[900]!,
+                  width: 0.1,
+                ),
               ),
               height: kToolbarHeight + 5,
               child: Row(
@@ -65,7 +69,28 @@ class _BottomnavbarState extends State<Bottomnavbar> {
                       icon: Icons.home_outlined, index: 0, label: "Home"),
                   _buildNavItem(
                       icon: Icons.message_outlined, index: 1, label: "Chat"),
-                  const SizedBox(width: 45), // For FAB notch
+                  Stack(
+                    alignment: Alignment.topCenter,
+                    clipBehavior: Clip.none,
+                    children: [
+                      Container(
+                        width: MediaQuery.of(context).size.width / 6,
+                        height: 50,
+                        color: Colors.transparent, // optional background placeholder
+                      ),
+                      Positioned(
+                        top: -51, // half of height to make it overlap nicely
+                        child: Container(
+                          width: 80,
+                          height: 80,
+                          decoration: const BoxDecoration(
+                            color: Colors.white,
+                            shape: BoxShape.circle,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
                   _buildNavItem(
                       icon: Icons.history_rounded, index: 2, label: "History"),
                   _buildNavItem(
@@ -89,29 +114,28 @@ class _BottomnavbarState extends State<Bottomnavbar> {
     return GestureDetector(
       onTap: () => setState(() => _selectedIndex = index),
       child: Container(
+        width: MediaQuery.of(context).size.width / 5.4,
         decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(30),
+            borderRadius: BorderRadius.circular(24),
             color: isSelected
-                ? Color.fromARGB(255, 141, 233, 98)
+                ? Color.fromARGB(255, 165, 255, 123)
                 : Colors.transparent),
-        padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 7),
+        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
         child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
+          mainAxisAlignment: MainAxisAlignment.spaceEvenly,
           mainAxisSize: MainAxisSize.min,
           children: [
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                Icon(
-                  icon,
-                  color: isSelected ? Colors.black :  Colors.white,
-                ),
-                SizedBox(height: 4),
-                Text(
-                  isSelected ? label : "",
-                  style: const TextStyle(fontSize: 12, color: Colors.black),
-                ),
-              ],
+            Icon(
+              icon,
+              color: isSelected ? Colors.black : Colors.white,
+            ),
+            SizedBox(height: 2),
+            Text(
+              isSelected ? label : label,
+              style: isSelected
+                  ? TextStyle(fontSize: 12, color: Colors.black)
+                  : TextStyle(
+                      fontSize: 12, color: Color.fromARGB(255, 240, 240, 240)),
             ),
           ],
         ),
