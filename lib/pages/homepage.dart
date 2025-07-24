@@ -1,16 +1,16 @@
 import 'package:flutter/material.dart';
+import 'package:medremind/pages/screens/addmedicinepage.dart';
+import 'package:medremind/pages/screens/calendarpage.dart';
 
 class Homepage extends StatefulWidget {
   const Homepage({super.key});
 
   @override
-  State<Homepage> createState() =>
-      _HomepageStateContent(); 
+  State<Homepage> createState() => _HomepageStateContent();
 }
 
 class _HomepageStateContent extends State<Homepage> {
   final DateTime today = DateTime.now();
-
 
   @override
   Widget build(BuildContext context) {
@@ -35,10 +35,13 @@ class _HomepageStateContent extends State<Homepage> {
           SliverAppBar(
             pinned: true,
             expandedHeight: 60.0,
-            backgroundColor: Colors.green[800],
+            // backgroundColor: Colors.green[800],
+          backgroundColor:Colors.purple[800], // Changed to purple for better contrast
+
             elevation: 0,
             centerTitle: true,
             flexibleSpace: const FlexibleSpaceBar(
+              
               centerTitle: false,
               expandedTitleScale: 1.5,
               title: Text('MedRemind',
@@ -52,13 +55,12 @@ class _HomepageStateContent extends State<Homepage> {
             actions: [
               Padding(
                 padding: const EdgeInsets.only(right: 10.0, top: 5, bottom: 5),
-                child:  Container(
+                child: Container(
                   decoration: BoxDecoration(
-                    color: Colors.green[300],
+                    color: Color.fromARGB(255, 130, 170, 155),
                     borderRadius: BorderRadius.circular(10),
                   ),
-                  padding: const EdgeInsets.all(3),
-
+                  padding: const EdgeInsets.all(2),
                   child: IconButton(
                     onPressed: () {
                       print('Profile button pressed!');
@@ -69,8 +71,6 @@ class _HomepageStateContent extends State<Homepage> {
                 ),
               )
             ],
-
-            
           ),
           SliverToBoxAdapter(
             child: Column(
@@ -112,7 +112,7 @@ class _HomepageStateContent extends State<Homepage> {
       ),
     );
   }
- 
+
   Widget _buildProgressBar(double progress, int taken, int total) {
     return Container(
       width: double.infinity,
@@ -120,8 +120,10 @@ class _HomepageStateContent extends State<Homepage> {
       decoration: BoxDecoration(
         gradient: LinearGradient(
           colors: [
-            Colors.green.shade800,
-            Colors.green.shade400
+            // Colors.green.shade800,
+            // Colors.green.shade500
+            Colors.purple[800]!, // Changed to purple for better contrast
+            Colors.purple[400]!, // Changed to purple for better contrast
           ], // Added ! for null safety
           begin: Alignment.topCenter,
           end: Alignment.bottomCenter,
@@ -134,7 +136,7 @@ class _HomepageStateContent extends State<Homepage> {
           BoxShadow(
             color: Colors.black.withOpacity(0.3),
             offset: const Offset(0, 6), // x=0, y=6 (bottom shadow)
-            blurRadius: 8,
+            blurRadius: 10,
             spreadRadius: 1,
           ),
         ],
@@ -151,7 +153,9 @@ class _HomepageStateContent extends State<Homepage> {
                   child: Container(
                     decoration: BoxDecoration(
                       shape: BoxShape.circle,
-                      color: Colors.green[800],
+                      // color: Colors.green[800],
+                      color: Colors.purple[800],
+
                       boxShadow: [
                         BoxShadow(
                           color: Colors.white.withOpacity(0.3),
@@ -160,12 +164,16 @@ class _HomepageStateContent extends State<Homepage> {
                         ),
                       ],
                     ),
-                    child: CircularProgressIndicator(
-                      value: progress,
-                      strokeWidth: 11,
-                      backgroundColor: Colors.white24,
-                      valueColor:
-                          const AlwaysStoppedAnimation<Color>(Colors.white),
+                    child: TweenAnimationBuilder<double>(
+                      tween: Tween<double>(begin: 0, end: progress),
+                      duration: const Duration(milliseconds:700),
+                      builder: (context, value, _) => CircularProgressIndicator(
+                        value: value,
+                        strokeWidth: 11,
+                        backgroundColor: Colors.white24,
+                        valueColor:
+                            const AlwaysStoppedAnimation<Color>(Colors.white),
+                      ),
                     ),
                   ),
                 ),
@@ -215,22 +223,27 @@ class _HomepageStateContent extends State<Homepage> {
             children: [
               _quickActionCard(
                 context: context,
-                color: Color.fromARGB(255, 19, 172, 19),
+                color: Color.fromARGB(255, 68, 120, 161),
+                // color: Color.fromARGB(255, 2, 62, 230),
+                // color:Color.fromARGB(255, 111, 111, 1),
+
                 icon: Icons.add_alert,
                 label: "Add Medicine",
                 onTap: () {
                   print('Add Medicine tapped!');
-                  // Navigator.push(context, MaterialPageRoute(builder: (_) => AddMedicinePage())), // Removed navigation
+                  Navigator.push(context, MaterialPageRoute(builder: (_) => AddMedicinePage())); // Removed navigation
                 },
               ),
               _quickActionCard(
                 context: context,
-                color: Color.fromARGB(255, 2, 62, 230),
+                color: Color.fromARGB(255, 121, 89, 60),
+                // color: Color.fromARGB(255, 123, 0, 148),
+
                 icon: Icons.calendar_month_outlined,
                 label: "Calendar View",
                 onTap: () {
                   print('Calendar View tapped!');
-                  // Navigator.push(context, MaterialPageRoute(builder: (_) => Calenderpg())), // Removed navigation
+                  Navigator.push(context, MaterialPageRoute(builder: (_) => Calendarpage())); // Removed navigation
                 },
               ),
             ],
@@ -284,10 +297,14 @@ class _HomepageStateContent extends State<Homepage> {
     required Color backgroundGreen,
   }) {
     return Card(
-      margin: const EdgeInsets.symmetric(
-          horizontal: 18, vertical: 6), 
+      margin: const EdgeInsets.symmetric(horizontal: 18, vertical: 6),
       child: ListTile(
-        leading: Icon(Icons.medical_services, color: backgroundGreen),
+        leading: Icon(
+          Icons.panorama_photosphere_rounded, 
+          // Icons.lens_blur_outlined,
+        color: Colors.green[700],
+        size: 30,
+        ),
         title: Text(medicine,
             style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w500)),
         subtitle:
@@ -306,4 +323,3 @@ class _HomepageStateContent extends State<Homepage> {
     );
   }
 }
-

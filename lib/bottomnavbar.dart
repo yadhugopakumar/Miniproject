@@ -31,15 +31,16 @@ class _BottomnavbarState extends State<Bottomnavbar> {
           ),
           elevation: 20,
           child: Container(
-            height: 70.0,
-            width: 70.0,
+            height: 65.0,
+            width: 65.0,
             child: FloatingActionButton(
               backgroundColor: Color.fromARGB(255, 36, 28, 59),
               onPressed: () {},
               child: const Icon(
                 Icons.mic_none_sharp,
-                size: 30,
-                color: Color.fromARGB(255, 134, 255, 97),
+                size: 33,
+                // color: Color.fromARGB(255, 134, 255, 97),
+                color: Color.fromARGB(255, 255, 216, 42),
               ),
             ),
           ),
@@ -54,7 +55,9 @@ class _BottomnavbarState extends State<Bottomnavbar> {
           elevation: 10,
           child: Container(
               decoration: BoxDecoration(
-                color: Colors.green[900]!.withOpacity(0.8),
+                // color: Colors.green[900]!.withOpacity(0.85),
+                color: Colors.purple[900]!.withOpacity(0.8),
+
                 borderRadius: BorderRadius.circular(15),
                 border: Border.all(
                   color: Colors.green[900]!,
@@ -74,15 +77,15 @@ class _BottomnavbarState extends State<Bottomnavbar> {
                     clipBehavior: Clip.none,
                     children: [
                       Container(
-                        width: MediaQuery.of(context).size.width / 6,
+                        width: MediaQuery.of(context).size.width / 8,
                         height: 50,
                         color: Colors.transparent, // optional background placeholder
                       ),
                       Positioned(
-                        top: -51, // half of height to make it overlap nicely
+                        top: -48, // half of height to make it overlap nicely
                         child: Container(
-                          width: 80,
-                          height: 80,
+                          width: 75,
+                          height: 75,
                           decoration: const BoxDecoration(
                             color: Colors.white,
                             shape: BoxShape.circle,
@@ -116,11 +119,11 @@ class _BottomnavbarState extends State<Bottomnavbar> {
       child: Container(
         width: MediaQuery.of(context).size.width / 5.4,
         decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(24),
+            borderRadius: BorderRadius.circular(20),
             color: isSelected
                 ? Color.fromARGB(255, 165, 255, 123)
                 : Colors.transparent),
-        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+        padding: const EdgeInsets.symmetric(horizontal: 2, vertical: 2),
         child: Column(
           mainAxisAlignment: MainAxisAlignment.spaceEvenly,
           mainAxisSize: MainAxisSize.min,
