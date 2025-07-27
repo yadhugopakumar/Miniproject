@@ -13,7 +13,7 @@ class _CalendarpageState extends State<Calendarpage> {
     return Scaffold(
       appBar: AppBar(
         title: const Text('Calendar'),
-        backgroundColor: Colors.purple[800],
+        backgroundColor: Colors.green[800],
         centerTitle: true,
          titleTextStyle:const TextStyle(
           color: Colors.white,
