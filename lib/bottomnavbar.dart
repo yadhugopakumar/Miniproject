@@ -1,4 +1,7 @@
 import 'package:flutter/material.dart';
+import 'package:hive/hive.dart';
+import 'package:medremind/pages/auth/pinlogin.dart';
+import 'package:medremind/pages/auth/register.dart';
 import 'package:medremind/pages/chatpage.dart';
 import 'package:medremind/pages/homepage.dart';
 import 'package:medremind/pages/innerpages/profilepage.dart';
@@ -89,11 +92,10 @@ class _BottomnavbarState extends State<Bottomnavbar> {
                         _buildNavItem(
                             icon: Icons.home_outlined, index: 0, label: "Home"),
                         _buildNavItem(
-                            icon: Icons.message_outlined,
-                            index: 1,
-                            label: "Chat",
-                     
-                            ),
+                          icon: Icons.message_outlined,
+                          index: 1,
+                          label: "Chat",
+                        ),
                         Stack(
                           alignment: Alignment.topCenter,
                           clipBehavior: Clip.none,
@@ -135,55 +137,55 @@ class _BottomnavbarState extends State<Bottomnavbar> {
     );
   }
 
- Widget _buildNavItem({
-  required IconData icon,
-  required int index,
-  required String label,
-}) {
-  final isSelected = _selectedIndex == index;
-  return GestureDetector(
-    onTap: () {
-      if (index == 1) {
-        // Navigate only for Chat
-        Navigator.push(
-          context,
-          MaterialPageRoute(builder: (context) => Chatpage()),
-        );
-      } else {
-        // Bottom bar behavior for others
-        setState(() => _selectedIndex = index);
-      }
-    },
-    child: Container(
-      width: MediaQuery.of(context).size.width / 5.4,
-      decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(25),
-        color: isSelected
-            ? Color.fromARGB(255, 165, 255, 123)
-            : Colors.transparent,
+  Widget _buildNavItem({
+    required IconData icon,
+    required int index,
+    required String label,
+  }) {
+    final isSelected = _selectedIndex == index;
+    return GestureDetector(
+      onTap: () {
+        if (index == 1) {
+          // Navigate only for Chat
+          Navigator.push(
+            context,
+            MaterialPageRoute(builder: (context) => Chatpage()),
+          );
+        } else {
+          // Bottom bar behavior for others
+          setState(() => _selectedIndex = index);
+        }
+      },
+      child: Container(
+        width: MediaQuery.of(context).size.width / 5.4,
+        decoration: BoxDecoration(
+          borderRadius: BorderRadius.circular(25),
+          color: isSelected
+              ? Color.fromARGB(255, 165, 255, 123)
+              : Colors.transparent,
+        ),
+        padding: const EdgeInsets.symmetric(horizontal: 2, vertical: 5),
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(
+              icon,
+              color: isSelected ? Colors.black : Colors.white,
+            ),
+            SizedBox(height: 2),
+            Text(
+              label,
+              style: isSelected
+                  ? TextStyle(fontSize: 12, color: Colors.black)
+                  : TextStyle(
+                      fontSize: 12, color: Color.fromARGB(255, 240, 240, 240)),
+            ),
+          ],
+        ),
       ),
-      padding: const EdgeInsets.symmetric(horizontal: 2, vertical: 5),
-      child: Column(
-        mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Icon(
-            icon,
-            color: isSelected ? Colors.black : Colors.white,
-          ),
-          SizedBox(height: 2),
-          Text(
-            label,
-            style: isSelected
-                ? TextStyle(fontSize: 12, color: Colors.black)
-                : TextStyle(fontSize: 12, color: Color.fromARGB(255, 240, 240, 240)),
-          ),
-        ],
-      ),
-    ),
-  );
-}
-
+    );
+  }
 
   Widget _buildDrawer() {
     return Drawer(
@@ -318,15 +320,31 @@ class _BottomnavbarState extends State<Bottomnavbar> {
                               style: TextStyle(color: Colors.green[900])),
                         ),
                         TextButton(
-                          onPressed: () {
+                          onPressed: () async {
                             Navigator.pop(context); // Close dialog
-                            Navigator.pushReplacement(
-                              context,
-                              MaterialPageRoute(
-                                  builder: (_) =>
-                                      Bottomnavbar(initialIndex: 0)),
-                            
-                            );
+
+                            final sessionBox = Hive.box('session');
+                            await sessionBox.put('loggedIn', false);
+
+                            // Check if user is already registered
+                            bool isRegistered = sessionBox.get('isRegistered',
+                                defaultValue: false);
+
+                            if (isRegistered) {
+                              // Go to PIN screen
+                              Navigator.pushReplacement(
+                                context,
+                                MaterialPageRoute(
+                                    builder: (_) => const LockScreen()),
+                              );
+                            } else {
+                              // Go to Register screen
+                              Navigator.pushReplacement(
+                                context,
+                                MaterialPageRoute(
+                                    builder: (_) => const RegisterScreen()),
+                              );
+                            }
                           },
                           child: Text("Logout",
                               style: TextStyle(color: Colors.green[900])),
