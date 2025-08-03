@@ -2,24 +2,31 @@ import 'package:flutter/material.dart';
 
 import '../bottomnavbar.dart';
 
-class Chatpage extends StatelessWidget {
+class Chatpage extends StatefulWidget {
   final List<Map<String, String>> messages = [
     {'role': 'user', 'text': 'Hi there!'},
     {'role': 'ai', 'text': 'Hello! How can I assist you today?'},
-    {'role': 'user', 'text': 'Tell me a joke.'},
-    {
-      'role': 'ai',
-      'text':
-          'Why don’t scientists trust atoms? Because they make up everything!'
-    },
+    
   ];
 
   Chatpage({super.key});
 
   @override
-  Widget build(BuildContext context) {
-    TextEditingController controller = TextEditingController();
+  State<Chatpage> createState() => _ChatpageState();
+}
 
+class _ChatpageState extends State<Chatpage> {
+  late List<Map<String, String>> messages;
+  final TextEditingController controller = TextEditingController();
+
+  @override
+  void initState() {
+    super.initState();
+    messages = List.from(widget.messages); // Copy initial messages
+  }
+
+  @override
+  Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
         centerTitle: true,
@@ -28,13 +35,12 @@ class Chatpage extends StatelessWidget {
         leading: IconButton(
           icon: const Icon(Icons.home),
           onPressed: () {
-  Navigator.pushAndRemoveUntil(
-    context,
-    MaterialPageRoute(builder: (_) => Bottomnavbar(initialIndex: 0)),
-    (route) => false,
-  );
-},
-
+            Navigator.pushAndRemoveUntil(
+              context,
+              MaterialPageRoute(builder: (_) =>const Bottomnavbar(initialIndex: 0)),
+              (route) => false,
+            );
+          },
         ),
       ),
       body: Column(
@@ -68,29 +74,72 @@ class Chatpage extends StatelessWidget {
             padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
             child: Row(
               children: [
+                // Emoji icon
+                IconButton(
+                  icon: const Icon(Icons.emoji_emotions_outlined),
+                  onPressed: () {
+                    // Handle emoji picker
+                  },
+                ),
+
+                // Text Field
                 Expanded(
                   child: TextField(
                     controller: controller,
-                    decoration: const InputDecoration(
-                      hintText: "Type your message...",
-                      border: OutlineInputBorder(),
+                    decoration: InputDecoration(
+                      hintText: "Type a message",
+                      filled: true,
+                      fillColor: Colors.grey[200],
+                      contentPadding: const EdgeInsets.symmetric(
+                          horizontal: 16, vertical: 10),
+                      border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(25),
+                        borderSide: BorderSide.none,
+                      ),
                     ),
                   ),
                 ),
-                const SizedBox(width: 8),
-                ElevatedButton(
+
+                // Camera icon
+                IconButton(
+                  icon: const Icon(Icons.camera_alt),
                   onPressed: () {
-                    // This is dummy — no actual sending
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      const SnackBar(
-                          content: Text("Message sent (not really)")),
-                    );
+                    // Handle camera
                   },
-                  child: const Icon(Icons.send),
+                ),
+
+                // Gallery icon
+                IconButton(
+                  icon: const Icon(Icons.photo),
+                  onPressed: () {
+                    // Handle gallery
+                  },
+                ),
+
+                // Send button
+                Container(
+                  decoration: const BoxDecoration(
+                    shape: BoxShape.circle,
+                    color: Colors.green,
+                  ),
+                  child: IconButton(
+                    icon: const Icon(Icons.send, color: Colors.white),
+                    onPressed: () {
+                      if (controller.text.isNotEmpty) {
+                        setState(() {
+                          messages.add({
+                            'role': 'user',
+                            'text': controller.text,
+                          });
+                        });
+                        controller.clear();
+                      }
+                    },
+                  ),
                 ),
               ],
             ),
-          ),
+          )
         ],
       ),
     );

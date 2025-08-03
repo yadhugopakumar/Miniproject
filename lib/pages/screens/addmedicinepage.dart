@@ -1,4 +1,9 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
+import 'package:hive/hive.dart';
+import '../../Hivemodel/medicine.dart';
+import '../../services/hive_services.dart';
+import '../../utils/date_utils.dart';
 
 class AddMedicinePage extends StatefulWidget {
   const AddMedicinePage({super.key});
@@ -13,11 +18,17 @@ class _AddMedicinePageState extends State<AddMedicinePage> {
   final _dosageController = TextEditingController();
   final _quantityController = TextEditingController();
   final _thresholdController = TextEditingController();
-  final maincolor = Colors.green[800];
 
   DateTime? _selectedDate;
   int? _timesPerDay;
   List<TimeOfDay?> _doseTimes = [null, null, null, null];
+
+  String? _intValidator(String? value, String fieldName) {
+    if (value == null || value.trim().isEmpty) return 'Enter $fieldName';
+    if (int.tryParse(value) == null) return '$fieldName must be an integer';
+    return null;
+  }
+
   Future<void> _pickDate(BuildContext context) async {
     final picked = await showDatePicker(
       context: context,
@@ -36,53 +47,142 @@ class _AddMedicinePageState extends State<AddMedicinePage> {
     if (picked != null) setState(() => _doseTimes[index] = picked);
   }
 
-  void _saveMedicine() {
+  Future<void> _saveMedicine() async {
     bool allTimesSelected = _timesPerDay != null &&
         List.generate(_timesPerDay!, (i) => _doseTimes[i])
             .every((t) => t != null);
+
     if (_formKey.currentState!.validate() &&
         _selectedDate != null &&
         _timesPerDay != null &&
         allTimesSelected) {
-      // ScaffoldMessenger.of(context).showSnackBar(
-      //   const SnackBar(content: Text('Medicine Saved!')),
-      // );
-      Navigator.pop(context);
-      showDialog(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: const Text("Success"),
-        content: Column(mainAxisAlignment: MainAxisAlignment.center,mainAxisSize: MainAxisSize.min,
-        children: [Text("New Medicine - ${_nameController.text.trim()} Added"),Icon(Icons.lens_blur,color: Colors.green,size: 30,)]),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text("Ok"),
-          ),
-          
-        ],
-      ),
-    );
+      final intakeTimes = List.generate(
+        _timesPerDay!,
+        (i) => timeOfDayToString(_doseTimes[i]!),
+      );
 
+      final name = _nameController.text.trim();
+      final dosage = _dosageController.text.trim();
+
+      final medicineBox = Hive.box<Medicine>(medicinesBox);
+      final alreadyExists = medicineBox.values.any(
+        (med) =>
+            med.name.toLowerCase() == name.toLowerCase() &&
+            med.dosage == dosage,
+      );
+
+      if (alreadyExists) {
+        showDialog(
+          context: context,
+          builder: (context) => AlertDialog(
+            title: const Text("Duplicate Medicine"),
+            content: Text("Medicine \"$name\" already exists."),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(context),
+                child: const Text("OK"),
+              ),
+            ],
+          ),
+        );
+        return; // Stop here
+      }
+
+      final medicine = Medicine(
+        name: name,
+        dosage: _dosageController.text.trim(),
+        expiryDate: _selectedDate!,
+        dailyIntakeTimes: intakeTimes,
+        totalQuantity: int.parse(_quantityController.text),
+        quantityLeft: int.parse(_quantityController.text),
+        refillThreshold: int.parse(_thresholdController.text),
+      );
+
+      medicineBox.add(medicine);
+
+      for (final timeStr in medicine.dailyIntakeTimes) {
+        final parts = timeStr.split(':');
+        final hour = int.parse(parts[0]);
+        final minute = int.parse(parts[1]);
+
+        DateTime scheduledTime = DateTime.now();
+        if (DateTime.now().isAfter(DateTime(
+          scheduledTime.year,
+          scheduledTime.month,
+          scheduledTime.day,
+          hour,
+          minute,
+        ))) {
+          scheduledTime = scheduledTime.add(const Duration(days: 1));
+        }
+
+        scheduledTime = DateTime(
+          scheduledTime.year,
+          scheduledTime.month,
+          scheduledTime.day,
+          hour,
+          minute,
+        );
+
+        // Schedule notification here if needed
+      }
+
+      showDialog(
+        context: context,
+        builder: (context) => AlertDialog(
+          backgroundColor: Colors.green[50],
+          title: const Text("Success"),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.center,
+            children: [
+              Text("Medicine \"$name\" added successfully."),
+              const Icon(Icons.check_circle,
+                  color: Color.fromARGB(255, 50, 160, 52), size: 62),
+            ],
+          ),
+          actions: [
+            TextButton(
+              onPressed: () {
+                Navigator.pop(context); // close dialog
+                Navigator.pop(context); // go back
+              },
+              child: const Text(
+                "OK",
+                style:
+                    TextStyle(color: Colors.black, fontWeight: FontWeight.bold),
+              ),
+            ),
+          ],
+        ),
+      );
     } else {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Please fill all fields!')),
+      showDialog(
+        context: context,
+        builder: (context) => AlertDialog(
+          title: const Text("Error"),
+          content:
+              const Text("Please fill all fields and select proper timings."),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: const Text("OK"),
+            ),
+          ],
+        ),
       );
     }
   }
 
   @override
   Widget build(BuildContext context) {
+    final mainGreen = const Color(0xFF166D5B);
+
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Add Medicine'),
-        backgroundColor: Colors.green[800],
-        centerTitle: true,
-        titleTextStyle: const TextStyle(
-          color: Colors.white,
-          fontSize: 20,
-          fontWeight: FontWeight.bold,
-        ),
+        title:
+            const Text('New Medicine', style: TextStyle(color: Colors.white)),
+        backgroundColor: Colors.green[700],
       ),
       body: SingleChildScrollView(
         padding: const EdgeInsets.all(24),
@@ -94,7 +194,7 @@ class _AddMedicinePageState extends State<AddMedicinePage> {
                 controller: _nameController,
                 decoration: InputDecoration(
                   labelText: 'Medicine Name',
-                  prefixIcon: Icon(Icons.medical_services, color: maincolor),
+                  prefixIcon: Icon(Icons.medical_services, color: mainGreen),
                 ),
                 validator: (v) => v == null || v.trim().isEmpty
                     ? 'Enter medicine name'
@@ -106,32 +206,33 @@ class _AddMedicinePageState extends State<AddMedicinePage> {
                 decoration: InputDecoration(
                   labelText: 'Dosage (e.g. 500mg)',
                   prefixIcon:
-                      Icon(Icons.format_list_numbered, color: maincolor),
+                      Icon(Icons.format_list_numbered, color: mainGreen),
                 ),
-                validator: (v) =>
-                    v == null || v.trim().isEmpty ? 'Enter dosage' : null,
+                keyboardType: TextInputType.number,
+                inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+                validator: (v) => _intValidator(v, "dosage"),
               ),
               const SizedBox(height: 16),
               TextFormField(
                 controller: _quantityController,
                 decoration: InputDecoration(
                   labelText: 'Total Quantity',
-                  prefixIcon: Icon(Icons.numbers, color: maincolor),
+                  prefixIcon: Icon(Icons.numbers, color: mainGreen),
                 ),
                 keyboardType: TextInputType.number,
-                validator: (v) =>
-                    v == null || v.isEmpty ? 'Enter total quantity' : null,
+                inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+                validator: (v) => _intValidator(v, "dosage"),
               ),
               const SizedBox(height: 16),
               TextFormField(
                 controller: _thresholdController,
                 decoration: InputDecoration(
                   labelText: 'Refill Threshold',
-                  prefixIcon: Icon(Icons.warning, color: maincolor),
+                  prefixIcon: Icon(Icons.warning, color: mainGreen),
                 ),
                 keyboardType: TextInputType.number,
-                validator: (v) =>
-                    v == null || v.isEmpty ? 'Enter refill threshold' : null,
+                inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+                validator: (v) => _intValidator(v, "dosage"),
               ),
               const SizedBox(height: 16),
               Row(
@@ -144,7 +245,7 @@ class _AddMedicinePageState extends State<AddMedicinePage> {
                     onSelected: (_) => setState(() => _timesPerDay = value),
                     selectedColor: Colors.green[700],
                     labelStyle: TextStyle(
-                      color: _timesPerDay == value ? Colors.white : maincolor,
+                      color: _timesPerDay == value ? Colors.white : mainGreen,
                       fontWeight: FontWeight.bold,
                       fontSize: 16,
                     ),
@@ -164,7 +265,7 @@ class _AddMedicinePageState extends State<AddMedicinePage> {
                           decoration: InputDecoration(
                             labelText: 'Time for dose ${i + 1}',
                             prefixIcon:
-                                Icon(Icons.access_time, color: maincolor),
+                                Icon(Icons.access_time, color: mainGreen),
                           ),
                           child: Text(
                             _doseTimes[i] == null
@@ -182,7 +283,7 @@ class _AddMedicinePageState extends State<AddMedicinePage> {
                 child: InputDecorator(
                   decoration: InputDecoration(
                     labelText: 'Expiry Date',
-                    prefixIcon: Icon(Icons.date_range, color: maincolor),
+                    prefixIcon: Icon(Icons.date_range, color: mainGreen),
                   ),
                   child: Text(
                     _selectedDate == null

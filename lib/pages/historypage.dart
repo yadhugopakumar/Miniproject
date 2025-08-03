@@ -1,4 +1,9 @@
 import 'package:flutter/material.dart';
+import 'package:hive_flutter/hive_flutter.dart';
+
+import '../Hivemodel/history_entry.dart';
+import '../Hivemodel/medicine.dart';
+import '../services/hive_services.dart';
 
 class HistoryPage extends StatefulWidget {
   const HistoryPage({super.key});
@@ -8,23 +13,37 @@ class HistoryPage extends StatefulWidget {
 }
 
 class _HistoryPageState extends State<HistoryPage> {
-  String selectedFilter = 'All';
+  @override
+  void initState() {
+    super.initState();
+    _populateMissedEntries();
+  }
 
-  final List<Map<String, dynamic>> staticHistory = [
-    {
-      "date": "2025-07-27",
-      "entries": [
-        {"medicineName": "Paracetamol", "time": "09:00 AM", "status": "taken"},
-        {"medicineName": "Amoxicillin", "time": "01:00 PM", "status": "missed"},
-      ]
-    },
-    {
-      "date": "2025-07-26",
-      "entries": [
-        {"medicineName": "Cetirizine", "time": "08:00 AM", "status": "taken"},
-      ]
+  void _populateMissedEntries() {
+    final history = Hive.box<HistoryEntry>(historyBox);
+    final medicines = Hive.box<Medicine>(medicinesBox);
+
+    final now = DateTime.now();
+    final todayKey = "${now.year}-${now.month}-${now.day}";
+
+    for (var med in medicines.values) {
+      for (var time in med.dailyIntakeTimes) {
+        final doseKey = "${med.name}@$time@$todayKey";
+        if (!history.containsKey(doseKey)) {
+          history.put(
+            doseKey,
+            HistoryEntry(
+              date: now,
+              medicineName: "${med.name}@$time",
+              status: 'missed',
+            ),
+          );
+        }
+      }
     }
-  ];
+  }
+
+  String selectedFilter = 'All';
 
   @override
   Widget build(BuildContext context) {
@@ -38,6 +57,7 @@ class _HistoryPageState extends State<HistoryPage> {
       ),
       body: Column(
         children: [
+          // Filter Buttons
           Padding(
             padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 10),
             child: Row(
@@ -58,57 +78,91 @@ class _HistoryPageState extends State<HistoryPage> {
               }).toList(),
             ),
           ),
+          // History List
           Expanded(
-            child: ListView(
-              children: staticHistory.map((day) {
-                final date = day["date"];
-                final entries = (day["entries"] as List<Map<String, dynamic>>)
-                    .where((entry) {
-                  if (selectedFilter == 'All') return true;
-                  if (selectedFilter == 'Taken') return entry['status'] == 'taken';
-                  if (selectedFilter == 'Missed') return entry['status'] != 'taken';
-                  return false;
-                }).toList();
+            child: ValueListenableBuilder(
+              valueListenable: Hive.box<HistoryEntry>(historyBox).listenable(),
+              builder: (context, Box<HistoryEntry> box, _) {
+                // Group entries by date
+                Map<String, List<HistoryEntry>> grouped = {};
+                for (var entry in box.values) {
+                  final dateStr =
+                      "${entry.date.year}-${entry.date.month.toString().padLeft(2, '0')}-${entry.date.day.toString().padLeft(2, '0')}";
+                  grouped.putIfAbsent(dateStr, () => []).add(entry);
+                }
 
-                if (entries.isEmpty) return const SizedBox();
+                // Sort dates descending
+                final sortedDates = grouped.keys.toList()
+                  ..sort((a, b) => b.compareTo(a));
 
-                return Padding(
-                  padding: const EdgeInsets.all(8.0),
-                  child: Card(
-                    elevation: 2,
-                    child: Padding(
-                      padding: const EdgeInsets.all(12),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(date,
-                              style: const TextStyle(
-                                  fontWeight: FontWeight.bold, fontSize: 16)),
-                          const Divider(),
-                          ...entries.map((entry) {
-                            return ListTile(
-                              leading: Icon(Icons.medication,
-                                  color: entry['status'] == 'taken'
-                                      ? Colors.green
-                                      : Colors.red),
-                              title: Text(entry['medicineName']),
-                              subtitle: entry['time'] != null
-                                  ? Text("Time: ${entry['time']}")
-                                  : null,
-                              trailing: Text(
-                                  entry['status'] == 'taken' ? 'Taken' : 'Missed',
-                                  style: TextStyle(
-                                      color: entry['status'] == 'taken'
+                if (sortedDates.isEmpty) {
+                  return const Center(child: Text("No history yet."));
+                }
+
+                return ListView(
+                  children: sortedDates.map((date) {
+                    // Filter by status
+                    final meds = grouped[date]!.where((entry) {
+                      if (selectedFilter == 'All') return true;
+                      if (selectedFilter == 'Taken')
+                        return entry.status == 'taken';
+                      if (selectedFilter == 'Missed')
+                        return entry.status != 'taken';
+                      return false;
+                    }).toList();
+
+                    if (meds.isEmpty) return const SizedBox();
+
+                    return Padding(
+                      padding: const EdgeInsets.all(8.0),
+                      child: Card(
+                        elevation: 2,
+                        child: Padding(
+                          padding: const EdgeInsets.all(12),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(date,
+                                  style: const TextStyle(
+                                      fontWeight: FontWeight.bold,
+                                      fontSize: 16)),
+                              const Divider(),
+                              ...meds.map((entry) {
+                                // Split medicineName into name and time if needed
+                                String medName = entry.medicineName;
+                                String time = '';
+                                if (medName.contains('@')) {
+                                  final parts = medName.split('@');
+                                  medName = parts[0];
+                                  time = parts.length > 1 ? parts[1] : '';
+                                }
+                                return ListTile(
+                                  leading: Icon(Icons.medication,
+                                      color: entry.status == 'taken'
                                           ? Colors.green
-                                          : Colors.red)),
-                            );
-                          })
-                        ],
+                                          : Colors.red),
+                                  title: Text(medName),
+                                  subtitle: time.isNotEmpty
+                                      ? Text("Time: $time")
+                                      : null,
+                                  trailing: Text(
+                                      entry.status == 'taken'
+                                          ? 'Taken'
+                                          : 'Missed',
+                                      style: TextStyle(
+                                          color: entry.status == 'taken'
+                                              ? Colors.green
+                                              : Colors.red)),
+                                );
+                              }),
+                            ],
+                          ),
+                        ),
                       ),
-                    ),
-                  ),
+                    );
+                  }).toList(),
                 );
-              }).toList(),
+              },
             ),
           ),
         ],
