@@ -2,12 +2,15 @@ import React from 'react';
 
 export default function MedRemindApp() {
   return (
-    <div className="min-h-screen bg-white font-sans antialiased">
+    <div className="min-h-screen bg-white font-sans antialiased" >
       {/* Header/AppBar */}
+
       <header className="bg-green-600 shadow-lg">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex justify-between items-center py-4">
-            <h1 className="text-2xl font-bold text-white">MedRemind</h1>
+            <a href='/'>
+              <h1 className="text-2xl font-bold text-white">MedRemind</h1>
+            </a>
             <nav className="hidden md:flex space-x-6">
               <a href="#" className="text-green-100 hover:text-white transition-colors duration-200 font-medium">
                 Dashboard
@@ -24,7 +27,7 @@ export default function MedRemindApp() {
       </header>
 
       {/* Main Content */}
-      <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+      <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8" >
         {/* Hero Section */}
         <div className="text-center mb-12">
           <h2 className="text-4xl font-bold text-gray-900 mb-4 leading-tight">
