@@ -1,14 +1,10 @@
-import { Navigate } from 'react-router-dom'
-import { supabase } from './supabase/supabase-client'
 
-const ProtectedRoute = ({ children }) => {
-//   const session = supabase.auth.getSession()  // promise, or use useEffect
-//   const user = supabase.auth.user()  // may be null
-    const user ='yadhu'
-  if (!user) {
-    return <Navigate to="/login" />
+
+import { Navigate } from 'react-router-dom';
+
+export default function ProtectedRoute({ session, children }) {
+  if (!session) {
+    return <Navigate to="/home" replace />;
   }
-  return children
+  return children;
 }
-
-export default ProtectedRoute

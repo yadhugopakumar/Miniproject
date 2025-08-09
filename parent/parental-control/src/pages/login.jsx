@@ -7,6 +7,7 @@ import { FcGoogle } from "react-icons/fc";
 import regimg from "../assets/regimg.png";
 
 export default function Login() {
+
   const navigate = useNavigate();
   const [formData, setFormData] = useState({
     email: '',
@@ -23,7 +24,6 @@ export default function Login() {
       [name]: type === 'checkbox' ? checked : value
     }));
   };
-
   const handleSubmit = async (e) => {
     e.preventDefault();
     setLoading(true);
@@ -32,17 +32,25 @@ export default function Login() {
 
     const { error } = await supabase.auth.signInWithPassword({
       email,
-      password
+      password,
     });
 
     setLoading(false);
 
     if (error) {
-      alert('Login failed: ' + error.message);
+      if (error.message === 'Invalid login credentials') {
+        alert('Incorrect email or password. Please try again.');
+      } else if (error.message.includes('Email not confirmed')) {
+        alert('Please verify your email before logging in.');
+      } else {
+        alert('Login failed: ' + error.message);
+      }
     } else {
-      navigate('/home');
+      navigate("/"); // Send to dashboard after login
+
     }
   };
+
 
   return (
     <div className="min-h-screen bg-white font-sans antialiased" style={{ backgroundColor: " rgb(244, 252, 245)" }}>
@@ -96,16 +104,9 @@ export default function Login() {
 
               <div className="flex items-center justify-between">
                 <div className="flex items-center space-x-2">
-                  <input
-                    type="checkbox"
-                    name="rememberMe"
-                    checked={formData.rememberMe}
-                    onChange={handleInputChange}
-                    className="h-4 w-4 text-green-600 focus:ring-green-500 border-gray-300 rounded"
-                  />
-                  <label className="text-sm text-gray-700">Remember me</label>
+                 
                 </div>
-                <a href="#" className="text-sm text-green-600 hover:text-green-700 font-medium">Forgot password?</a>
+                <Link to="/forgotpassword" className="text-sm text-green-600 hover:text-green-700 font-medium" style={{color:"green"}}>Forgot password?</Link>
               </div>
 
               <button
@@ -140,7 +141,7 @@ export default function Login() {
               <div className="text-center mt-6">
                 <p className="text-gray-600">
                   Don't have an account?{' '}
-                  <Link to="/register" className="text-green-600 hover:text-green-700 font-medium">
+                  <Link to="/register" className="text-green-600 hover:text-green-700 font-medium" style={{ color: "green" }}>
                     Create Account
                   </Link>
                 </p>

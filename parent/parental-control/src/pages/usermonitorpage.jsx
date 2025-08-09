@@ -1,9 +1,8 @@
 
 
-import {  useState } from "react";
+import { useState } from "react";
 import { supabase } from "../supabase/supabase-client"; // <-- adjust path
 import { useNavigate } from "react-router-dom";
-import MemberCardsGrid from "../components/memberscard";
 import Header from "../components/header";
 
 export default function Home() {
@@ -21,7 +20,7 @@ export default function Home() {
       console.error("Error logging out:", err.message);
     }
   };
- 
+
   return (
     <div className="min-h-screen bg-white font-sans antialiased">
       {/* Header */}
@@ -37,8 +36,7 @@ export default function Home() {
             </p>
             <div className="flex justify-end gap-3">
               <button
-                onClick={() => setShowModal(false)
-                }
+                onClick={() => setShowModal(false)}
                 className="px-4 py-2 bg-gray-300 rounded hover:bg-gray-400"
               >
                 Cancel
@@ -56,44 +54,7 @@ export default function Home() {
 
       {/* Main Content */}
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        <div className="text-center mb-12">
-        
-          <h2 className="text-4xl font-bold text-gray-900 mb-4 leading-tight">
-            Parental Control Dashboard
-          </h2>
-
-          {/* Stats Section */}
-          <div className="bg-gradient-to-r from-green-50 to-green-100 rounded-xl p-8 mb-8">
-            <h3 className="text-2xl font-bold text-gray-900 mb-6 text-center">
-              Quick Stats
-            </h3>
-
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-              <div className="text-center">
-                <div className="text-3xl font-bold text-green-600 mb-2">4</div>
-                <div className="text-gray-700 font-medium">Active Members</div>
-              </div>
-              <div className="text-center">
-                <div className="text-3xl font-bold text-red-500 mb-2">3</div>
-                <div className="text-gray-700 font-medium">
-                  Missed Medications (Last 7 Days)
-                </div>
-              </div>
-              <div className="text-center">
-                <div className="text-3xl font-bold text-yellow-500 mb-2">5</div>
-                <div className="text-gray-700 font-medium">
-                  Late Medications Taken
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
-
-        <h3 className="text-2xl font-bold text-gray-900 mb-6 text-center">
-          Members
-        </h3>
-
-        <MemberCardsGrid />
+     
       </main>
 
       {/* Footer */}

@@ -22,7 +22,7 @@ a {
   text-decoration: inherit;
 }
 a:hover {
-  color: #000000;
+  color: #ffecc2;
 
 }
 
@@ -36,9 +36,10 @@ body {
 h1 {
   font-size: 2em;
   line-height: 1.1;
+
 }
 
-button {
+/* button {
   border-radius: 8px;
   border: 1px solid transparent;
   padding: 0.6em 1.2em;
@@ -48,9 +49,12 @@ button {
   background-color: #3aca71;
   cursor: pointer;
   transition: border-color 0.25s;
-}
+} */
+ button{
+  color: white;
+ }
 button:hover {
-  background-color: #41ac61;
+  color: #f7f2b3;
 }
 button:focus,
 button:focus-visible {

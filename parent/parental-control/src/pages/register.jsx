@@ -1,3 +1,4 @@
+
 import React, { useState } from 'react';
 import { supabase } from '../supabase/supabase-client';
 import regimg from "../assets/regimg.png";
@@ -29,62 +30,57 @@ export default function Register() {
     setErrorMsg('');
     setSuccessMsg('');
 
+    // Frontend validations
     if (formData.password !== formData.confirmPassword) {
-      setErrorMsg("Passwords do not match");
+      setErrorMsg('Passwords do not match');
       return;
     }
-
     if (!formData.agreedToTerms) {
-      setErrorMsg("You must agree to the terms");
+      setErrorMsg('You must agree to the terms');
       return;
     }
 
     setLoading(true);
-
     try {
-      // 1. Create Supabase Auth User
-      const { data: authData, error: signUpError } = await supabase.auth.signUp({
+      // 1. SIGN UP Parent Account
+      const { data, error: signUpError } = await supabase.auth.signUp({
         email: formData.email,
-        password: formData.password
+        password: formData.password,
       });
+      if (signUpError) throw signUpError;
+      const user = data.user;
+      if (!user) throw new Error('Signup failed');
+      
+      const { error: profileError } = await supabase
+        .from('parent_profiles')
+        .insert([
+          {
+            id: user.id,   // MUST match authenticated user UUID
+            full_name: formData.parentName,
+            phone: formData.phone,
+          }
+        ], { returning: 'minimal' });  // avoids extra select that requires select policy
+      if (profileError) throw profileError;
+      
 
-      if (signUpError) {
-        setErrorMsg(signUpError.message);
-        setLoading(false);
-        return;
-      }
-
-      const userId = authData.user.id;
-
-      // 2. Store additional parent info in 'parents' table
-      const { error: dbError } = await supabase.from('parents').insert([
-        {
-          id: userId,
-          name: formData.parentName,
-          email: formData.email,
-          phone: formData.phone
-        }
-      ]);
-
-      if (dbError) {
-        setErrorMsg(dbError.message);
-      } else {
-        setSuccessMsg('Account created successfully! Please verify your email.');
-        setFormData({
-          parentName: '',
-          email: '',
-          phone: '',
-          password: '',
-          confirmPassword: '',
-          agreedToTerms: false
-        });
-      }
+      setSuccessMsg('Account created successfully! Please verify your email before logging in.');
+      setFormData({
+        parentName: '',
+        email: '',
+        phone: '',
+        password: '',
+        confirmPassword: '',
+        agreedToTerms: false
+      });
     } catch (err) {
-      setErrorMsg('Unexpected error. Please try again.');
+      // Provide readable error
+      setErrorMsg(err.message || 'An error occurred');
     } finally {
       setLoading(false);
     }
   };
+
+
   return (
     <div className="min-h-screen bg-white font-sans antialiased" style={{ backgroundColor: 'rgb(244, 252, 245)' }}>
       {/* Header */}
@@ -98,13 +94,9 @@ export default function Register() {
 
       {/* Main Content Split into Two */}
       <div className="flex flex-col lg:flex-row min-h-[calc(100vh-56px)] items-center justify-center">
-
-        {/* Side Image + Features */}
-        <div className="hidden lg:flex lg:flex-col lg:items-center lg:justify-start">          <img
-            src={regimg}
-            alt="Medicine Reminder"
-            className="w-3/3 h-auto object-contain mb-6 mt-4"
-          />
+        {/* Side Image */}
+        <div className="hidden lg:flex lg:flex-col lg:items-center lg:justify-start">
+          <img src={regimg} alt="Medicine Reminder" className="w-3/3 h-auto object-contain mb-6 mt-4" />
 
           <div className="space-y-4 w-full max-w-xs">
             <div className="bg-green-50 border border-green-200 rounded-lg p-3">
@@ -133,7 +125,6 @@ export default function Register() {
             </div>
           </div>
         </div>
-
 
         {/* Form Section */}
         <main className="w-full lg:w-1/2 px-4 sm:px-6 lg:px-16 py-12">
@@ -223,7 +214,7 @@ export default function Register() {
                   className="mt-1 h-4 w-4 text-green-600"
                 />
                 <label className="text-sm text-gray-700">
-                  I agree to the <a href="#" className="text-green-600 underline">Terms of Service</a> and <a href="#" className="text-green-600 underline">Privacy Policy</a>
+                  I agree to the <a href="#" className="text-green-600 underline" style={{ color: "grey" }}>Terms of Service</a> and <a href="#" className="text-green-600 underline" style={{ color: "grey" }}>Privacy Policy</a>
                 </label>
               </div>
 
@@ -237,17 +228,13 @@ export default function Register() {
 
               <div className="text-center mt-6">
                 <p className="text-gray-600">
-                  Already have an account? <a href="/login" className="text-green-600 hover:text-green-700 font-medium">Sign In</a>
+                  Already have an account? <a href="/login" className="text-green-600 hover:text-green-700 font-medium" style={{ color: "green" }}>Sign In</a>
                 </p>
               </div>
             </form>
           </div>
-
-
         </main>
       </div>
     </div>
   );
-
-
 }
