@@ -1,5 +1,3 @@
-
-
 import { useState, useRef, useEffect } from "react";
 import { FaUserCircle } from "react-icons/fa";
 import { IoPersonAddSharp } from "react-icons/io5";
@@ -12,7 +10,7 @@ import { GrClose } from "react-icons/gr";
 import Swal from 'sweetalert2'
 
 
-export default function Header({ onMemberAdded, onMedicineAdded }) {
+export default function Header() {
   const [open, setOpen] = useState(false);
   const [showNewMemberModal, setShowNewMemberModal] = useState(false);
   const [username, setUsername] = useState("");
@@ -141,6 +139,27 @@ export default function Header({ onMemberAdded, onMedicineAdded }) {
   }
 
   // Delete account handler (confirm first)
+  async function deleteAccount() {
+    if (!confirm("Are you sure you want to delete your account? This action is irreversible.")) {
+      return;
+    }
+    setUpdating(true);
+    setError(null);
+    const user = supabase.auth.user();
+    if (!user) {
+      setError("User not logged in");
+      setUpdating(false);
+      return;
+    }
+
+    // Supabase doesn't provide direct account deletion via client SDK yet;
+    // You may need a server function or use REST API with admin rights.
+    // For demo, just sign out:
+    alert("Account deletion needs backend support. Signing out for now.");
+    await supabase.auth.signOut();
+    setUpdating(false);
+  }
+
 
 
   // Close menu on outside click
@@ -174,12 +193,42 @@ export default function Header({ onMemberAdded, onMedicineAdded }) {
   // Inside your component:
   const [loading, setLoading] = useState(false);
 
+  // Handle adding new child user
+  // const handleAddChildUser = async (e) => {
+  //   e.preventDefault();
+  //   setLoading(true);
+  //   try {
+  //     const { data: { user } } = await supabase.auth.getUser();
+  //     if (!user) {
+  //       alert("You must be logged in to add a new member.");
+  //       return;
+  //     }
+
+  //     const { error } = await supabase.from("child_users").insert([
+  //       {
+  //         parent_id: user.id,
+  //         username: username.trim(),
+  //         age: parseInt(age, 10),
+  //       },
+  //     ]);
+
+  //     if (error) throw error;
+
+  //     alert("New member added successfully!");
+  //     setUsername("");
+  //     setShowNewMemberModal(false);
+  //   } catch (err) {
+  //     console.error(err);
+  //     alert("Failed to add new member.");
+  //   } finally {
+  //     setLoading(false);
+  //   }
+  // };
 
   const handleAddChildUser = async (e) => {
     e.preventDefault();
-
-
     setLoading(true);
+
     try {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) {
@@ -252,13 +301,11 @@ export default function Header({ onMemberAdded, onMedicineAdded }) {
         .select()
         .single();
 
-
-
-
       if (error) throw error;
-      if (onMemberAdded) {
-        onMemberAdded();  // Call the parent callback to refresh members
-      }
+
+      // Update UI immediately without waiting for a refetch
+      setChildUsers((prev) => [...prev, inserted]);
+
       Swal.fire({
         position: "top-end",
         icon: "success",
@@ -283,11 +330,15 @@ export default function Header({ onMemberAdded, onMedicineAdded }) {
     } finally {
       setLoading(false);
     }
+    console.log("haai");
 
   };
 
+
+
   const location = useLocation();
   const [isModalOpen, setIsModalOpen] = useState(false);
+  const [medloading, setMedLoading] = useState(false);
   const intakeTimesOptions = [
     "06:00 AM",
     "09:00 AM",
@@ -333,14 +384,12 @@ export default function Header({ onMemberAdded, onMedicineAdded }) {
       }
     });
   };
-
-
   const handleSubmit = async (e) => {
     e.preventDefault();
     setLoading(true);
 
     try {
-      const { data, error } = await supabase.from("medicine").insert([
+      const { error } = await supabase.from("medicine").insert([
         {
           child_id: formData.child_id,
           name: formData.name,
@@ -348,46 +397,28 @@ export default function Header({ onMemberAdded, onMedicineAdded }) {
           expiry_date: formData.expiry_date,
           daily_intake_times: formData.daily_intake_times,
           total_quantity: parseInt(formData.total_quantity, 10),
-          quantity_left: parseInt(formData.total_quantity, 10),
-          refill_threshold: parseInt(formData.refill_threshold, 10),
+          quantity_left: parseInt(formData.quantity_left, 10),
+          refill_threshold: parseInt(formData.refill_threshold, 10)
         }
-      ]).select()
-        .single();
+      ]);
 
       if (error) throw error;
 
-      Swal.fire({
-        position: "top-end",
-        icon: "success",
-        title: `New medicine - ${formData.name} added`,
-        showConfirmButton: false,
-        timer: 1500,
-      });
-      if (onMedicineAdded) onMedicineAdded(data);
       setFormData({
         child_id: "",
         name: "",
         dosage: "",
         expiry_date: "",
-        daily_intake_times: [],
+        daily_intake_times: "",
         total_quantity: "",
         quantity_left: "",
-        refill_threshold: "",
+        refill_threshold: ""
       });
-
       setIsModalOpen(false);
-
     } catch (err) {
       console.error("Error adding medicine:", err.message);
-      Swal.fire({
-        position: "top-end",
-        icon: "error",
-        title: "Failed to add medicine",
-        showConfirmButton: false,
-        timer: 1500,
-      });
     } finally {
-      setLoading(false);
+      setMedLoading(false);
     }
   };
 
@@ -416,94 +447,60 @@ export default function Header({ onMemberAdded, onMedicineAdded }) {
     });
 
   }
-  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
-  // Close mobile menu on route change
-  useEffect(() => {
-    setMobileMenuOpen(false);
-  }, [location.pathname]);
+
   return (
     <>
-
-      <header className="bg-green-600 shadow-lg fixed top-0 left-0 right-0 z-50">
+      <header className="bg-green-600 shadow-lg">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="flex justify-between items-center py-2 pt-2">
-
-            {/* Logo */}
-            <Link to="/" className="text-white font-bold text-2xl">
-              MedRemind
+          <div className="flex justify-between items-center py-4">
+            <Link to="/">
+              <h1 className="text-2xl font-bold text-white">MedRemind</h1>
             </Link>
-
-            {/* Hamburger button - only on small screens */}
-            <button
-              onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
-              className="md:hidden text-green-100 hover:text-white focus:outline-none"
-              aria-label="Toggle menu"
-            >
-              <svg
-                className="w-6 h-6"
-                fill="none"
-                stroke="currentColor"
-                viewBox="0 0 24 24"
-                xmlns="http://www.w3.org/2000/svg"
-              >
-                <path
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  strokeWidth="2"
-                  d={
-                    mobileMenuOpen
-                      ? "M6 18L18 6M6 6l12 12" // X icon when open
-                      : "M4 6h16M4 12h16M4 18h16" // hamburger icon when closed
-                  }
-                />
-              </svg>
-            </button>
-
-            {/* Desktop nav */}
-            <nav className="hidden md:flex space-x-6 items-center ">
+            <nav className="hidden md:flex space-x-6 items-center">
               <button
                 onClick={() => setShowNewMemberModal(true)}
-                className="flex items-center gap-2 text-green-100 hover:text-white border border-green-100 rounded px-3 py-1   transition-colors duration-200 font-medium"
+                className="flex items-center gap-2 text-green-100 hover:text-white border border-green-100 rounded px-3 py-1 transition-colors duration-200 font-medium"
               >
                 <IoPersonAddSharp size={18} />
                 New Member
               </button>
-
-              {location.pathname === "/medicinestock" ? (
-                <button
+              {
+                location.pathname === "/medicinestock" ? (<button
                   onClick={() => setIsModalOpen(true)}
                   className="flex items-center gap-2 text-green-100 hover:text-white border border-green-100 rounded px-3 py-1 transition-colors duration-200 font-medium"
                 >
                   <IoAdd size={18} color="white" />
                   Add Medicine
-                </button>
-              ) : (
-                <Link
-                  to="/medicinestock"
-                  className="flex items-center gap-2 text-green-100 hover:text-white border border-green-100 rounded px-3 py-1 transition-colors duration-200 font-medium"
-                >
-                  <FaPills size={18} color="white" />
-                  Medicine Stock
-                </Link>
-              )}
+                </button>) : (
+                  <Link
+                    to="/medicinestock"
+                    className="flex items-center gap-2 text-green-100 hover:text-white border border-green-100 rounded px-3 py-1 transition-colors duration-200 font-medium"
+                  >
+                    <FaPills size={18} color="white" />
+                    Medicine Stock
+                  </Link>)
 
-              {/* Profile dropdown */}
-              <div className="relative pt-4 ">
+
+              }
+
+
+              {/* Profile Dropdown */}
+              <div className="relative" ref={menuRef}>
                 <button
                   onClick={() => setOpen(!open)}
                   className="text-green-100 hover:text-white transition-colors duration-200"
                 >
                   <FaUserCircle size={28} />
                 </button>
+
                 {open && (
                   <div className="absolute right-0 mt-2 w-40 bg-white rounded-md shadow-lg py-2 z-50">
-                    <button
-                      onClick={() => {
-                        setOpen(false);
-                        setShowProfileModal(true);
-                      }}
-                      className="block w-full text-left px-4 py-2 hover:bg-gray-100 text-black-700"
-                      style={{ color: "green" }}
+                    <button onClick={() => {
+                      setOpen(false);
+                      setShowProfileModal(true);
+                    }}
+                      className="block w-full text-left px-4 py-2 hover:bg-gray-100"
+                      style={{ color: "green", backgroundColor: "transparent" }}
                     >
                       Profile
                     </button>
@@ -512,9 +509,8 @@ export default function Header({ onMemberAdded, onMedicineAdded }) {
                         setOpen(false);
                         onLogoutClick();
                       }}
-                      className="block w-full text-left px-4 py-2 hover:bg-gray-100 text-green-700"
-                      style={{ color: "green" }}
-
+                      className="block w-full text-left px-4 py-2 hover:bg-gray-100"
+                      style={{ color: "green", backgroundColor: "transparent" }}
                     >
                       Logout
                     </button>
@@ -524,67 +520,7 @@ export default function Header({ onMemberAdded, onMedicineAdded }) {
             </nav>
           </div>
         </div>
-
-        {/* Mobile menu dropdown */}
-        <div
-          className={`md:hidden bg-green-700 overflow-hidden transition-max-height duration-300 ease-in-out  ${mobileMenuOpen ? "max-h-96" : "max-h-0"
-            }`}
-        >
-          <nav className="flex flex-col px-4 pb-4 space-y-3 text-green-100 pt-4">
-            <button
-              onClick={() => {
-                setShowNewMemberModal(true);
-                setMobileMenuOpen(false);
-              }}
-              className="flex items-center gap-2 border border-green-100 rounded px-3 py-2 font-medium hover:bg-green-600"
-            >
-              <IoPersonAddSharp size={18} />
-              New Member
-            </button>
-
-            {location.pathname === "/medicinestock" ? (
-              <button
-                onClick={() => {
-                  setIsModalOpen(true);
-                  setMobileMenuOpen(false);
-                }}
-                className="flex items-center gap-2 border border-green-100 rounded px-3 py-2 font-medium hover:bg-green-600"
-              >
-                <IoAdd size={18} />
-                Add Medicine
-              </button>
-            ) : (
-              <Link
-                to="/medicinestock"
-                onClick={() => setMobileMenuOpen(false)}
-                className="flex items-center gap-2 border border-green-100 rounded px-3 py-2 font-medium hover:bg-green-600"
-              >
-                <FaPills size={18} />
-                Medicine Stock
-              </Link>
-            )}
-            <button
-              onClick={() => {
-                setMobileMenuOpen(false);
-                setShowProfileModal(true);
-              }}
-              className="flex items-center gap-2 border border-green-100 rounded px-3 py-2 font-medium hover:bg-green-600"
-            >
-              <FaUserCircle size={28} />
-              Profile
-            </button>
-            <button
-              onClick={() => {
-                setMobileMenuOpen(false);
-                onLogoutClick();
-              }}
-              className="flex items-center gap-2 border border-green-100 rounded px-3 py-2 font-medium hover:bg-green-600"
-            >
-              Logout
-            </button>
-          </nav>
-        </div>
-      </header>
+      </header >
 
       {showNewMemberModal && (
         <div className="fixed inset-0 flex items-center justify-center backdrop-blur-sm bg-black/30 z-50">
@@ -803,6 +739,23 @@ export default function Header({ onMemberAdded, onMedicineAdded }) {
                   />
                 </div>
 
+                {/* Quantity Left */}
+                <div>
+                  <label htmlFor="quantity_left" className="block font-medium mb-1">
+                    Quantity Left
+                  </label>
+                  <input
+                    id="quantity_left"
+                    type="number"
+                    name="quantity_left"
+                    placeholder="Quantity Left"
+                    value={formData.quantity_left}
+                    onChange={handleChange}
+                    min={0}
+                    required
+                    className="border p-2 w-full rounded"
+                  />
+                </div>
 
                 {/* Refill Threshold */}
                 <div>
@@ -826,35 +779,21 @@ export default function Header({ onMemberAdded, onMedicineAdded }) {
                 <div className="flex justify-end gap-3 mt-4">
                   <button
                     type="button"
-                    onClick={() => {
-                      setIsModalOpen(false)
-
-                      setFormData({
-                        child_id: "",
-                        name: "",
-                        dosage: "",
-                        expiry_date: "",
-                        daily_intake_times: [],
-                        total_quantity: "",
-                        quantity_left: "",
-                        refill_threshold: "",
-                      });
-                    }}
+                    onClick={() => setIsModalOpen(false)}
                     className="px-4 py-2 rounded bg-gray-600 hover:bg-gray-800"
                   >
                     Cancel
                   </button>
                   <button
                     type="submit"
-                    disabled={loading}
-                    className={`px-4 py-2 rounded bg-green-600 text-white hover:bg-green-700 flex items-center gap-2 ${loading ? "opacity-50 cursor-not-allowed" : ""}`}
+                    disabled={medloading}
+                    className="px-4 py-2 rounded bg-green-600 text-white hover:bg-green-700 flex items-center gap-2"
                   >
                     {loading && (
                       <span className="animate-spin h-4 w-4 border-2 border-white border-t-transparent rounded-full"></span>
                     )}
                     Save
                   </button>
-
                 </div>
               </form>
             </div>

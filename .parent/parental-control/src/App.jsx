@@ -85,7 +85,7 @@ export default function App({ session }) {
         }
       />
       <Route path="/login" element={<Login />} />
-      <Route path="/register" element={<Signup />} />
+      <Route path="/signup" element={<Signup />} />
       <Route path="/forgotpassword" element={<ForgotPassword />} />
       <Route path="/reset-password" element={<ResetPassword />} />
       <Route path="/profile/:id" element={<UserProfile />} />

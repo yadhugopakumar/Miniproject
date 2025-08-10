@@ -1,6 +1,6 @@
 
 
-import { useState, useEffect } from "react";
+import {  useState } from "react";
 import { supabase } from "../supabase/supabase-client"; // <-- adjust path
 import { useNavigate } from "react-router-dom";
 import MemberCardsGrid from "../components/memberscard";
@@ -9,72 +9,6 @@ import Header from "../components/header";
 export default function Home() {
   const [showModal, setShowModal] = useState(false);
   const navigate = useNavigate();
-
-  const [members, setMembers] = useState([]);
-  const [refreshKey, setRefreshKey] = useState(0);
-
-  // Add these states
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState(null);
-
-  const [activecount, setActiveCount] = useState(0);
-
-  // Fetch members whenever refreshKey changes
-  useEffect(() => {
-    async function fetchData() {
-      setLoading(true);
-      setError(null);
-
-      // Get current user once
-      const {
-        data: { user },
-        error: userError,
-      } = await supabase.auth.getUser();
-
-      if (userError || !user) {
-        setError("User not logged in");
-        setLoading(false);
-        return;
-      }
-
-      try {
-        // Run queries in parallel
-        const [membersResponse, countResponse] = await Promise.all([
-          supabase
-            .from("child_users")
-            .select("*")
-            .eq("parent_id", user.id)
-            .order("username", { ascending: true }),
-          supabase
-            .from("child_users")
-            .select("id", { count: "exact", head: true })
-            .eq("parent_id", user.id),
-        ]);
-
-        const [membersData, membersError] = [membersResponse.data, membersResponse.error];
-        const [countData, countError] = [countResponse.count, countResponse.error];
-
-        if (membersError) throw membersError;
-        if (countError) throw countError;
-
-        setMembers(membersData || []);
-        setActiveCount(countData || 0);
-      } catch (err) {
-        console.error(err);
-        setError(err.message || "Error fetching data");
-      } finally {
-        setLoading(false);
-      }
-    }
-
-    fetchData();
-  }, [refreshKey]);
-
-
-  // Callback to trigger refresh
-  function handleMemberAdded() {
-    setRefreshKey((prev) => prev + 1);
-  }
 
   // Handle logout confirmation
   const handleLogout = async () => {
@@ -87,11 +21,12 @@ export default function Home() {
       console.error("Error logging out:", err.message);
     }
   };
-
+ 
   return (
     <div className="min-h-screen bg-white font-sans antialiased">
       {/* Header */}
-      <Header onMemberAdded={handleMemberAdded} />
+      <Header />
+
       {/* Logout Modal */}
       {showModal && (
         <div className="fixed inset-0 flex items-center justify-center backdrop-blur-sm bg-black/20 z-50">
@@ -120,10 +55,10 @@ export default function Home() {
       )}
 
       {/* Main Content */}
-      <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-20">
+      <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         <div className="text-center mb-12">
-
-          <h2 className="text-4xl font-bold text-gray-900 mb-4 leading-tight  md:mt-4">
+        
+          <h2 className="text-4xl font-bold text-gray-900 mb-4 leading-tight">
             Parental Control Dashboard
           </h2>
 
@@ -135,7 +70,7 @@ export default function Home() {
 
             <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
               <div className="text-center">
-                <div className="text-3xl font-bold text-green-600 mb-2">{activecount}</div>
+                <div className="text-3xl font-bold text-green-600 mb-2">4</div>
                 <div className="text-gray-700 font-medium">Active Members</div>
               </div>
               <div className="text-center">
@@ -158,19 +93,7 @@ export default function Home() {
           Members
         </h3>
 
-        {/* <MemberCardsGrid refreshKey={refreshKey} /> */}
-
-        {loading && <div className="grid place-items-center">
-          <div className="flex flex-col items-center justify-center">
-            <div className="animate-spin rounded-full h-14 w-14 border-t-4 border-green-600"></div>
-            <span className="mt-4 text-gray-700 font-medium">Loading child details...</span>
-          </div>
-        </div>
-        }
-        {error && <div style={{ color: "red" }}>{error}</div>}
-        {!loading && !error && <MemberCardsGrid members={members} />}
-
-
+        <MemberCardsGrid />
       </main>
 
       {/* Footer */}
