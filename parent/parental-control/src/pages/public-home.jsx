@@ -126,7 +126,7 @@ export default function PublicHome({ session }) {
                 Sign In
               </Link>
               <Link
-                to="/signup"
+                to="/register"
                 className="border-2 border-green-600 text-green-600 hover:bg-green-600 hover:text-white px-8 py-4 rounded-xl text-lg font-semibold transform hover:scale-105 transition-all duration-300" style={{ backgroundColor: "rgb(199, 252, 199)", color: "green" }}
               >
                 Sign Up

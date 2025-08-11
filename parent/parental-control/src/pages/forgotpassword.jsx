@@ -5,18 +5,21 @@ export default function ForgotPassword() {
   const [email, setEmail] = useState("");
   const [message, setMessage] = useState("");
 
+
+  // password reset function it calls resetpassword component
   async function handleSubmit(e) {
     e.preventDefault();
     const { error } = await supabase.auth.resetPasswordForEmail(email, {
-        redirectTo: `${window.location.origin}/reset-password/` // adjust path as needed
-      });
-      
+      redirectTo: `${window.location.origin}/reset-password`
+    });
+
     if (error) {
       setMessage("Error sending reset email: " + error.message);
     } else {
       setMessage("Password reset email sent! Check your inbox.");
     }
   }
+  // password reset function it calls resetpassword component
 
   return (
     <form onSubmit={handleSubmit} className="max-w-md mx-auto p-8">

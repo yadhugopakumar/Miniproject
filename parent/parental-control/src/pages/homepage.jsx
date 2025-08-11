@@ -127,7 +127,7 @@ export default function Home() {
             Parental Control Dashboard
           </h2>
 
-          {/* Stats Section */}
+          {/* ----------------Stats Section ---------------------*/}
           <div className="bg-gradient-to-r from-green-50 to-green-100 rounded-xl p-8 mb-8">
             <h3 className="text-2xl font-bold text-gray-900 mb-6 text-center">
               Quick Stats
@@ -152,13 +152,13 @@ export default function Home() {
               </div>
             </div>
           </div>
+          {/* ----------------Stats Section ---------------------*/}
+
         </div>
 
         <h3 className="text-2xl font-bold text-gray-900 mb-6 text-center">
           Members
         </h3>
-
-        {/* <MemberCardsGrid refreshKey={refreshKey} /> */}
 
         {loading && <div className="grid place-items-center">
           <div className="flex flex-col items-center justify-center">
@@ -167,9 +167,12 @@ export default function Home() {
           </div>
         </div>
         }
+
+
+        {/* -----showing dynamic chil users------------- */}
         {error && <div style={{ color: "red" }}>{error}</div>}
         {!loading && !error && <MemberCardsGrid members={members} />}
-
+        {/* -----showing dynamic chil users------------- */}
 
       </main>
 

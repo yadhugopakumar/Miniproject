@@ -2,7 +2,7 @@
 import React, { useState } from 'react';
 import { supabase } from '../supabase/supabase-client';
 import regimg from "../assets/regimg.png";
-import { useNavigate } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import Swal from 'sweetalert2'
 
 export default function Register() {
@@ -55,18 +55,14 @@ export default function Register() {
       if (!user) throw new Error('Signup failed');
 
       await supabase
-      .from('parent_profiles')
-      .insert([{
-        id: data.user.id,
-        full_name:  formData.parentName,
-        phone: formData.phone,
-        email: formData.email
-      }], { returning: 'minimal' });
-    // avoids extra select that requires select policy
-      
-
-
-      // setSuccessMsg('Account created successfully! Please verify your email before logging in.');
+        .from('parent_profiles')
+        .insert([{
+          id: data.user.id,
+          full_name: formData.parentName,
+          phone: formData.phone,
+          email: formData.email
+        }], { returning: 'minimal' });
+      // avoids extra select that requires select policy
 
       setFormData({
         parentName: '',
@@ -80,7 +76,7 @@ export default function Register() {
       Swal.fire({
         title: "Register Success",
         html: "You will be redirected to login page",
-        icon: "success",      
+        icon: "success",
         timer: 2000,
         timerProgressBar: true,
         didOpen: () => {
@@ -146,7 +142,7 @@ export default function Register() {
           </div>
         </div>
 
-        {/* Form Section */}
+        {/* -------------------register Form Section-------------------- */}
         <main className="w-full lg:w-1/2 px-4 sm:px-6 lg:px-16 py-12">
           <div className="bg-white rounded-xl shadow-lg border border-gray-100 p-8">
             <div className="text-center mb-8">
@@ -248,12 +244,14 @@ export default function Register() {
 
               <div className="text-center mt-6">
                 <p className="text-gray-600">
-                  Already have an account? <a href="/login" className="text-green-600 hover:text-green-700 font-medium" style={{ color: "green" }}>Sign In</a>
+                  Already have an account? <Link to="/login" className="text-green-600 hover:text-green-700 font-medium" style={{ color: "green" }}>Sign In</Link>
                 </p>
               </div>
             </form>
           </div>
         </main>
+        {/* -------------------register Form Section-------------------- */}
+
       </div>
     </div>
   );

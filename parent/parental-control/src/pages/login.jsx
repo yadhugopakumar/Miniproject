@@ -25,6 +25,10 @@ export default function Login() {
       [name]: type === 'checkbox' ? checked : value
     }));
   };
+
+
+  // ------------login with credentials method start -------------------------
+
   const handleSubmit = async (e) => {
     e.preventDefault();
     setLoading(true);
@@ -76,11 +80,30 @@ export default function Login() {
 
     }
   };
+  // ------------login with credentials method end -------------------------
+
+  // ------------login with google auth method start -------------------------
 
   const handleGoogleLogin = async () => {
-    const { error } = await supabase.auth.signInWithOAuth({ provider: "google" });
-    if (error) alert("Login error: " + error.message);
+    const { error } = await supabase.auth.signInWithOAuth({
+      provider: "google",
+      options: {
+        // redirectTo: window.location.origin
+        redirectTo: `${window.location.origin}/authcallback`,
+      }
+    });
+    if (error) {
+      Swal.fire({
+        position: "top-end",
+        icon: "error",
+        title: "Login error" + error.message,
+        showConfirmButton: false,
+        timer: 1000
+      });
+    }
   };
+  // ------------login with google auth method end -------------------------
+
 
   return (
     <div className="min-h-screen bg-white font-sans antialiased" style={{ backgroundColor: " rgb(244, 252, 245)" }}>
@@ -105,6 +128,7 @@ export default function Login() {
               <p className="text-gray-600">Sign in to access your parental controls</p>
             </div>
 
+            {/* ---------------------signin form template -------------------------- */}
             <form onSubmit={handleSubmit} className="space-y-6">
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-2">Email Address</label>
@@ -179,10 +203,10 @@ export default function Login() {
                 </p>
               </div>
             </form>
+            {/* ---------------------signin form template -------------------------- */}
 
 
           </div>
-
 
           {/* Side Image Section */}
           <div className="hidden lg:block lg:w-1/2 bg-green-50 p-6 space-y-6">
