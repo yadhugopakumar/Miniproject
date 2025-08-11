@@ -1,3 +1,6 @@
+// --------------auth callback method helper for google auth login-------------
+
+
 import { useState, useEffect } from "react";
 import { supabase } from "../supabase/supabase-client";
 import { useNavigate, useLocation } from "react-router-dom";
@@ -7,64 +10,51 @@ export default function ResetPassword() {
   const [message, setMessage] = useState("");
   const [loading, setLoading] = useState(false);
   const navigate = useNavigate();
-  
-// to get the url from the hash link
+  const location = useLocation();
+
+
   useEffect(() => {
-    const cleanUrl = () => {
-      if (window.location.hash === '#') {
-        window.history.replaceState(null, '', window.location.pathname + window.location.search);
+    const handleSessionFromUrl = async () => {
+      const hash = location.hash;
+      if (!hash) {
+        setMessage("Invalid or expired password reset link.");
+        return;
       }
-    };
-  
-    const checkSession = async () => {
-      const { data: { session } } = await supabase.auth.getSession();
-  
-      if (session) {
-        setMessage('Please enter your new password below.');
+      const { data, error } = await supabase.auth.exchangePasswordForSession({ url: window.location.href });
+
+      if (error || !data.session) {
+        setMessage("Failed to validate reset link. Please try again.");
       } else {
-        setMessage('Invalid or expired password reset link.');
-        // Optional: Redirect user back to homepage after showing message
-        // setTimeout(() => navigate('/'), 3000);
+        // Session established, you can store or use it if needed
+        setMessage(""); // clear message if any
       }
-      cleanUrl();
     };
-  
-    checkSession();
-  }, []);
-// to get the url from the hash link
-  
-// to manage the ResetPassword,opens reset pswd form and its actions managing function
+    handleSessionFromUrl();
+  }, [location]);
+
   const handleReset = async (e) => {
     e.preventDefault();
     setLoading(true);
-    setMessage('');
-  
-    const { data: { session } } = await supabase.auth.getSession();
-    if (!session) {
-      setMessage('Your password reset session has expired. Please request a new link.');
-      setLoading(false);
-      return;
-    }
-  
+    setMessage("");
+
     const { error } = await supabase.auth.updateUser({ password: newPassword });
+
     setLoading(false);
-  
+
     if (error) {
-      setMessage('Error resetting password: ' + error.message);
+      setMessage("Error resetting password: " + error.message);
     } else {
-      setMessage('Password successfully reset! Redirecting to login...');
-      setTimeout(() => navigate('/login'), 2000);
+      setMessage("Password successfully reset! Redirecting to login...");
+      setTimeout(() => navigate("/login"), 3000);
     }
   };
-// to manage the ResetPassword,opens reset pswd form and its actions managing function
-  
 
   return (
     <div className="max-w-md mx-auto p-6 mt-10 bg-white rounded shadow">
       <h2 className="text-2xl font-semibold mb-4">Reset Password</h2>
       {message && <p className="mb-4">{message}</p>}
 
-      {message && message.includes("Please enter your new password") && (
+      {!message.includes("successfully") && (
         <form onSubmit={handleReset}>
           <label htmlFor="new-password" className="block mb-2 font-medium">
             Enter new password

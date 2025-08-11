@@ -4,12 +4,13 @@ import { useState, useRef, useEffect } from "react";
 import { FaUserCircle } from "react-icons/fa";
 import { IoPersonAddSharp } from "react-icons/io5";
 import { FaPills } from "react-icons/fa6";
-import { supabase } from "../supabase/supabase-client"; // your supabase client
+import { supabase } from "../supabase/supabase-client"; //  supabase client
 import { Link } from "react-router-dom";
 import { useLocation } from "react-router-dom";
 import { IoAdd } from "react-icons/io5";
 import { GrClose } from "react-icons/gr";
 import Swal from 'sweetalert2'
+import { showError, showSuccess } from "../utils/alert"; // for my custom alerts
 
 
 export default function Header({ onMemberAdded, onMedicineAdded }) {
@@ -27,48 +28,64 @@ export default function Header({ onMemberAdded, onMedicineAdded }) {
   const [passwords, setPasswords] = useState({ oldPassword: "", newPassword: "" });
   const [updating, setUpdating] = useState(false);
   const [error, setError] = useState(null);
-  const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
 
+
+  const openProfileModal = () => {
+    setError("");
+    setProfile(null);       //  null while loading
+    setLoadingProfile(true); //  set loading BEFORE showing modal
+    setShowProfileModal(true);
+  };
+
   // Fetch profile on modal open
+  // ------------modal showing mehod for profile start-----------------------
   useEffect(() => {
-    async function fetchProfile() {
-      setLoadingProfile(true);
+    if (!showProfileModal) return;
+    let mounted = true;
 
-      // Get user from supabase v2+
-      const {
-        data: { user },
-        error: userError,
-      } = await supabase.auth.getUser();
+    (async function fetchProfile() {
+      try {
+        openProfileModal()
+        // keep loading already true from openProfileModal
+        const { data: { user }, error: userError } = await supabase.auth.getUser();
+        if (!mounted) return;
 
-      if (userError || !user) {
-        setError(userError?.message || "No user logged in");
-        setLoadingProfile(false);
-        return;
+        if (userError || !user) {
+          setError(userError?.message || "No user logged in");
+          setLoadingProfile(false);
+          return;
+        }
+
+        const { data, error } = await supabase
+          .from("parent_profiles")
+          .select("full_name, phone, email")
+          .eq("id", user.id)
+          .single();
+
+        if (!mounted) return;
+
+        if (error) {
+          setError(error.message);
+          setProfile({ name: "", mobile: "", email: "" });
+        } else {
+          setProfile({
+            name: data?.full_name || "",
+            mobile: data?.phone || "",
+            email: data?.email || ""
+          });
+        }
+      } catch (err) {
+        if (mounted) setError(err.message || "Failed to fetch");
+      } finally {
+        if (mounted) setLoadingProfile(false);
       }
+    })();
 
-      // Now fetch profile info from your profiles table (adjust name as needed)
-      const { data, error } = await supabase
-        .from("parent_profiles")
-        .select("full_name, phone,email")
-        .eq("id", user.id)
-        .single();
-
-      if (error) {
-        setError(error.message);
-      } else if (data) {
-        setProfile({ name: data.full_name || "", mobile: data.phone || "", email: data.email || "" });
-      } else {
-        setProfile({ name: "", mobile: "" });
-      }
-
-      setLoadingProfile(false);
-    }
-
-    if (showProfileModal) {
-      fetchProfile();
-    }
+    return () => { mounted = false; };
   }, [showProfileModal]);
+  // ------------modal showing mehod for profile end-----------------------
+
 
   // Handle input change for profile form
   function handleProfileChange(e) {
@@ -158,7 +175,7 @@ export default function Header({ onMemberAdded, onMedicineAdded }) {
         setChildUsers(data);
       }
     }
-
+    // -----------method for fetching all child users---------------------
     fetchChildUsers();
     function handleClickOutside(e) {
 
@@ -169,7 +186,9 @@ export default function Header({ onMemberAdded, onMedicineAdded }) {
     document.addEventListener("mousedown", handleClickOutside);
     return () => document.removeEventListener("mousedown", handleClickOutside);
   }, []);
+  // -----------method for fetching all child users---------------------
 
+  // -----------method for adding new child users---------------------
 
   // Inside your component:
   const [loading, setLoading] = useState(false);
@@ -253,8 +272,6 @@ export default function Header({ onMemberAdded, onMedicineAdded }) {
         .single();
 
 
-
-
       if (error) throw error;
       if (onMemberAdded) {
         onMemberAdded();  // Call the parent callback to refresh members
@@ -285,6 +302,9 @@ export default function Header({ onMemberAdded, onMedicineAdded }) {
     }
 
   };
+  // -----------method for adding new child users---------------------
+
+  // -----------method for adding new medicine for child users---------------------
 
   const location = useLocation();
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -334,36 +354,87 @@ export default function Header({ onMemberAdded, onMedicineAdded }) {
     });
   };
 
-
   const handleSubmit = async (e) => {
     e.preventDefault();
     setLoading(true);
 
     try {
-      const { data, error } = await supabase.from("medicine").insert([
-        {
-          child_id: formData.child_id,
-          name: formData.name,
-          dosage: formData.dosage,
-          expiry_date: formData.expiry_date,
-          daily_intake_times: formData.daily_intake_times,
-          total_quantity: parseInt(formData.total_quantity, 10),
-          quantity_left: parseInt(formData.total_quantity, 10),
-          refill_threshold: parseInt(formData.refill_threshold, 10),
-        }
-      ]).select()
+      // --- VALIDATIONS ---
+      if (!formData.child_id) {
+        showError("Please select a child.");
+        setLoading(false);
+        return;
+      }
+
+      if (!formData.name || formData.name.trim().length < 2) {
+        showError("Medicine name must be at least 2 characters.");
+        setLoading(false);
+        return;
+      }
+
+      if (isNaN(formData.dosage) || Number(formData.dosage) <= 0) {
+        showError("Dosage must be a valid number greater than 0.");
+        setLoading(false);
+        return;
+      }
+
+      if (isNaN(formData.total_quantity) || Number(formData.total_quantity) < 0) {
+        showError("Total quantity must be a non-negative number.");
+        setLoading(false);
+        return;
+      }
+
+      if (isNaN(formData.refill_threshold) || Number(formData.refill_threshold) < 0) {
+        showError("Refill threshold must be a non-negative number.");
+        setLoading(false);
+        return;
+      }
+
+      if (Number(formData.refill_threshold) > Number(formData.total_quantity)) {
+        showError("Refill threshold cannot be greater than total quantity.");
+        setLoading(false);
+        return;
+      }
+
+      // --- DUPLICATE CHECK ---
+      const { data: existingMed, error: checkError } = await supabase
+        .from("medicine")
+        .select("id")
+        .eq("child_id", formData.child_id)
+        .ilike("name", formData.name.trim()); // case-insensitive
+
+      if (checkError) throw checkError;
+
+      if (existingMed && existingMed.length > 0) {
+        showError(`Medicine "${formData.name}" already exists for this child.`);
+        setLoading(false);
+        return;
+      }
+
+      // --- INSERT ---
+      const { data, error } = await supabase
+        .from("medicine")
+        .insert([
+          {
+            child_id: formData.child_id,
+            name: formData.name.trim(),
+            dosage: Number(formData.dosage),
+            expiry_date: formData.expiry_date,
+            daily_intake_times: formData.daily_intake_times,
+            total_quantity: Number(formData.total_quantity),
+            quantity_left: Number(formData.total_quantity),
+            refill_threshold: Number(formData.refill_threshold),
+          }
+        ])
+        .select()
         .single();
 
       if (error) throw error;
 
-      Swal.fire({
-        position: "top-end",
-        icon: "success",
-        title: `New medicine - ${formData.name} added`,
-        showConfirmButton: false,
-        timer: 1500,
-      });
+      showSuccess(`New medicine - ${formData.name} added`);
+
       if (onMedicineAdded) onMedicineAdded(data);
+
       setFormData({
         child_id: "",
         name: "",
@@ -379,18 +450,14 @@ export default function Header({ onMemberAdded, onMedicineAdded }) {
 
     } catch (err) {
       console.error("Error adding medicine:", err.message);
-      Swal.fire({
-        position: "top-end",
-        icon: "error",
-        title: "Failed to add medicine",
-        showConfirmButton: false,
-        timer: 1500,
-      });
+      showError("Failed to add medicine");
     } finally {
       setLoading(false);
     }
   };
+  // -----------method for adding new medicine for child users---------------------
 
+  //-----------current session user logout-----------------
   const onLogoutClick = () => {
     Swal.fire({
       title: "Logout Confirmation",
@@ -416,14 +483,19 @@ export default function Header({ onMemberAdded, onMedicineAdded }) {
     });
 
   }
+  //-----------current session user logout-----------------
+
+  // ----------------for mobile menu dropsown-----------------------
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   // Close mobile menu on route change
   useEffect(() => {
     setMobileMenuOpen(false);
   }, [location.pathname]);
+  // ----------------for mobile menu dropsown-----------------------
+
+
   return (
     <>
-
       <header className="bg-green-600 shadow-lg fixed top-0 left-0 right-0 z-50">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex justify-between items-center py-2 pt-2">
@@ -586,6 +658,7 @@ export default function Header({ onMemberAdded, onMedicineAdded }) {
         </div>
       </header>
 
+      {/* ----------add new child member modal form start----------------------- */}
       {showNewMemberModal && (
         <div className="fixed inset-0 flex items-center justify-center backdrop-blur-sm bg-black/30 z-50">
           <div className="bg-white rounded-lg p-6 w-96 shadow-lg">
@@ -665,12 +738,11 @@ export default function Header({ onMemberAdded, onMedicineAdded }) {
         </div>
       )
       }
+      {/* ----------add new child member modal form end----------------------- */}
 
-      {/* add medicine modalform */}
+      {/* ----------add new medicine modal form start----------------------- */}
+
       {isModalOpen && (
-        // <div className="bg-white rounded-lg shadow-lg p-6 w-full max-w-lg max-h-[100vh] overflow-y-auto z-50">
-
-        //  <div className="fixed overflow-y-auto inset-0 backdrop-blur-sm bg-black/30 z-50 flex justify-center items-center " > 
         <div className="fixed inset-0 overflow-y-auto backdrop-blur-sm bg-black/30 z-50 flex justify-center pt-2 pb-2 max-h-[100vh]">
           <div className="bg-white rounded-lg shadow-lg w-full max-w-lg max-h-[100vh] overflow-y-auto">
             <div className="bg-green-50 rounded-lg shadow-lg p-6 w-full max-w-lg" >
@@ -861,111 +933,127 @@ export default function Header({ onMemberAdded, onMedicineAdded }) {
           </div>
         </div>
       )}
+      {/* ----------add new medicine modal form end----------------------- */}
 
 
-      {/* Profile Modal */}
+
+      {/* ----------amodal form for profile display start----------------------- */}
+
       {showProfileModal && (
-        <div className="fixed inset-0 flex items-center justify-center backdrop-blur-sm bg-black/30 z-50 p-4 overflow-auto">
-          <div className="bg-white rounded-lg shadow-lg p-6 w-full max-w-md max-h-[90vh] overflow-y-auto relative">
-            <div className="flex items-center justify-between">
-              <h2 className="text-xl font-semibold mb-4">Profile Details</h2>
+        <div className="fixed inset-0 flex items-center justify-center backdrop-blur-sm bg-black/30 z-50 p-4 overflow-auto ">
+          <div className="bg-white rounded-lg shadow-lg p-6 w-full max-w-md  max-h-[90vh] overflow-y-auto relative">
 
-
-              <button
-                type="button"
-                onClick={() => setShowProfileModal(false)}
-                className="px-4 py-2 rounded bg-gray-100 text-black hover:bg-red-200 "
-
+            <div className="fixed inset-0 flex items-center justify-center backdrop-blur-sm bg-black/30 z-50 p-4 overflow-auto">
+              <div
+                className={`bg-white rounded-lg shadow-lg p-6 w-full max-w-md overflow-y-auto relative transition-all duration-300`}
+                style={{
+                  // minHeight: loadingProfile ? "0px" : "auto", // Small fixed height when loading
+                  // maxHeight: "90vh"
+                  height: "90vh"
+                }}
               >
-                <GrClose style={{ color: "black" }} />
-              </button>
-            </div>
-            {loadingProfile ? (
-              <p>Loading...</p>
-            ) : (
-              <>
-                {error && <p className="text-red-600 mb-4">{error}</p>}
-                <div className="mb-4">
-                  <label className="block mb-1 font-medium">User Email</label>
-                  <div className="w-full bg-gray-200 px-3 py-2">{profile.email}</div>
-                </div>
-                <div className="mb-4">
-                  <label className="block mb-1 font-medium">Name</label>
-                  <input
-                    type="text"
-                    name="name"
-                    value={profile.name}
-                    onChange={handleProfileChange}
-                    className="w-full border rounded px-3 py-2"
-                  />
-                </div>
-                <div className="mb-4">
-                  <label className="block mb-1 font-medium">Mobile</label>
-                  <input
-                    type="tel"
-                    name="mobile"
-                    value={profile.mobile}
-                    onChange={handleProfileChange}
-                    className="w-full border rounded px-3 py-2"
-                  />
-                </div>
-                <button
-                  onClick={updateProfile}
-                  disabled={updating}
-                  className="bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded mb-6"
-                >
-                  {updating ? "Updating..." : "Update Profile"}
-                </button>
+                <div className="flex items-center justify-between">
+                  <h2 className="text-xl font-semibold mb-4">Profile Details</h2>
 
-                <hr className="my-6" />
 
-                <h3 className="text-lg font-semibold mb-3">Change Password</h3>
-                <div className="mb-4">
-                  <label className="block mb-1 font-medium">New Password</label>
-                  {/* <input
-                    type="password"
-                    name="newPassword"
-                    value={passwords.newPassword}
-                    onChange={handlePasswordChange}
-                    className="w-full border rounded px-3 py-2"
-                  /> */}
-                  <input
-                    type={showPassword ? "text" : "password"}
-                    value={passwords.oldPassword}
-                    onChange={(e) => setPasswords({ ...passwords, oldPassword: e.target.value })}
-                    placeholder="Enter your password"
-                    className="border p-2 rounded w-full"
-                  />
                   <button
                     type="button"
-                    onClick={() => setShowPassword(!showPassword)}
-                    className="absolute right-2 top-2 text-sm text-gray-600"
+                    onClick={() => setShowProfileModal(false)}
+                    className="px-4 py-2 rounded bg-gray-100 text-black hover:bg-red-200 "
+
                   >
-                    {showPassword ? "Hide" : "Show"}
+                    <GrClose style={{ color: "black" }} />
                   </button>
                 </div>
+
+                {loadingProfile || profile === null ? (
+                  <div className="h-[60vh] flex flex-col items-center justify-center">
+                    <div className="animate-spin rounded-full h-20 w-20 border-t-5 border-green-600"></div>
+                    <span className="mt-4 text-gray-700 font-medium">Loading Profile ...</span>
+                  </div>
+                ) : (
+                  <>
+                    {error && <p className="text-red-600 mb-4">{error}</p>}
+                    <div className="mb-4">
+                      <label className="block mb-1 font-medium">User Email</label>
+                      <div className="w-full bg-gray-200 px-3 py-2">{profile.email}</div>
+                    </div>
+                    <div className="mb-4">
+                      <label className="block mb-1 font-medium">Name</label>
+                      <input
+                        type="text"
+                        name="name"
+                        value={profile.name}
+                        onChange={handleProfileChange}
+                        className="w-full border rounded px-3 py-2"
+                      />
+                    </div>
+                    <div className="mb-4">
+                      <label className="block mb-1 font-medium">Mobile</label>
+                      <input
+                        type="tel"
+                        name="mobile"
+                        value={profile.mobile}
+                        onChange={handleProfileChange}
+                        className="w-full border rounded px-3 py-2"
+                      />
+                    </div>
+                    <button
+                      onClick={updateProfile}
+                      disabled={updating}
+                      className="bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded mb-6"
+                    >
+                      {updating ? "Updating..." : "Update Profile"}
+                    </button>
+
+                    <hr className="my-6" />
+
+                    <h3 className="text-lg font-semibold mb-3">Change Password</h3>
+                    <div className="mb-4">
+                      <label className="block mb-1 font-medium">New Password</label>
+
+                      <input
+                        type={showPassword ? "text" : "password"}
+                        value={passwords.oldPassword}
+                        onChange={(e) => setPasswords({ ...passwords, oldPassword: e.target.value })}
+                        placeholder="Enter your password"
+                        className="border p-2 rounded w-full"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => setShowPassword(!showPassword)}
+                        className="absolute right-2 top-2 text-sm text-gray-600"
+                      >
+                        {showPassword ? "Hide" : "Show"}
+                      </button>
+                    </div>
+                    <button
+                      onClick={changePassword}
+                      disabled={updating}
+                      className="bg-yellow-500 hover:bg-yellow-600 text-white px-4 py-2 rounded mb-6"
+                    >
+                      {updating ? "Updating..." : "Change Password"}
+                    </button>
+
+
+                  </>
+                )}
+
                 <button
-                  onClick={changePassword}
-                  disabled={updating}
-                  className="bg-yellow-500 hover:bg-yellow-600 text-white px-4 py-2 rounded mb-6"
+                  onClick={() => setShowProfileModal(!showProfileModal)}
+                  className="absolute top-2 right-2 text-gray-600 hover:text-gray-900 font-bold text-xl"
+                  aria-label="Close profile modal"
                 >
-                  {updating ? "Updating..." : "Change Password"}
+                  &times;
                 </button>
-
-
-              </>
-            )}
-
-            <button
-              onClick={() => setShowProfileModal(!showProfileModal)}
-              className="absolute top-2 right-2 text-gray-600 hover:text-gray-900 font-bold text-xl"
-              aria-label="Close profile modal"
-            >
-              &times;
-            </button>
+              </div>
+            </div>
           </div>
         </div>
+
       )}
+      {/* ----------amodal form for profile display end----------------------- */}
+
     </>
   );
 }

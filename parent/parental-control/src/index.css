@@ -21,6 +21,7 @@ a {
   color: #ffffff;
   text-decoration: inherit;
 }
+
 a:hover {
   color: #ffecc2;
 
@@ -29,7 +30,7 @@ a:hover {
 body {
   width: 100vw;
   margin: 0;
-/* background-color: rgb(205, 255, 212); */
+  /* background-color: rgb(205, 255, 212); */
   width: 100vw;
 }
 
@@ -50,12 +51,14 @@ h1 {
   cursor: pointer;
   transition: border-color 0.25s;
 } */
- button{
+button {
   color: white;
- }
+}
+
 button:hover {
   color: #f7f2b3;
 }
+
 button:focus,
 button:focus-visible {
   outline: 4px auto -webkit-focus-ring-color;
@@ -66,10 +69,36 @@ button:focus-visible {
     color: rgba(12, 12, 12, 0.87);
     background-color: #ffffff;
   }
+
   a:hover {
     color: #ffffff;
   }
+
   button {
     background-color: #a9b197;
+  }
+
+
+}
+
+@media screen and (max-width: 640px) {
+  .custom-scroll::-webkit-scrollbar {
+    height: 8px;
+    /* horizontal */
+    width: 8px;
+    /* vertical */
+  }
+
+  .custom-scroll::-webkit-scrollbar-track {
+    background: #0ec2cf;
+  }
+
+  .custom-scroll::-webkit-scrollbar-thumb {
+    background: #fa2626;
+    border-radius: 40px;
+  }
+
+  .custom-scroll::-webkit-scrollbar-thumb:hover {
+    background: #555;
   }
 }
