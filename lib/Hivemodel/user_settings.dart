@@ -11,7 +11,7 @@ class UserSettings extends HiveObject {
   String pin;
   
   @HiveField(5)
-  String ? parentPhone;
+  String ? phone;
 
   @HiveField(6)
   String ? parentEmail;
@@ -30,7 +30,7 @@ class UserSettings extends HiveObject {
     required this.pin,
     required this.securityQuestion,
     required this.securityAnswer,
-     this.parentPhone,
+     this.phone,
      this.parentEmail,
     String? alarmSound,
   }) : alarmSound = alarmSound ?? 'default_alarm.mp3';

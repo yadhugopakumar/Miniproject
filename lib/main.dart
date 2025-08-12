@@ -52,7 +52,8 @@ class MyApp extends StatelessWidget {
         scaffoldBackgroundColor: Colors.white,
       ),
       debugShowCheckedModeBanner: false,
-      home: isRegistered ? const LockScreen() : const RegisterScreen(),
+      // home: isRegistered ? const LockScreen() : const RegisterScreen(),
+      home: const RegisterScreen(),
     );
   }
 }

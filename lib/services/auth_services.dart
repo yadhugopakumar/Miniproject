@@ -28,7 +28,7 @@ void register(
     alarmSound: sound,
     securityQuestion: selectedQuestion,
     securityAnswer: answer,
-    parentPhone: parentPhone,
+    phone: parentPhone,
     parentEmail: parentEmail,
   ));
 }

@@ -21,7 +21,7 @@ class UserSettingsAdapter extends TypeAdapter<UserSettings> {
       pin: fields[1] as String,
       securityQuestion: fields[3] as String,
       securityAnswer: fields[4] as String,
-      parentPhone: fields[5] as String?,
+      phone: fields[5] as String?,
       parentEmail: fields[6] as String?,
       alarmSound: fields[2] as String?,
     );
@@ -36,7 +36,7 @@ class UserSettingsAdapter extends TypeAdapter<UserSettings> {
       ..writeByte(1)
       ..write(obj.pin)
       ..writeByte(5)
-      ..write(obj.parentPhone)
+      ..write(obj.phone)
       ..writeByte(6)
       ..write(obj.parentEmail)
       ..writeByte(2)

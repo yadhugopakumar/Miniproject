@@ -66,7 +66,7 @@ bool validateLogin(String username, String pin) {
       pin: '',
       securityQuestion: '',
       securityAnswer: '',
-      parentPhone: '',
+      phone: '',
       parentEmail: '',
     ),
   );

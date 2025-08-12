@@ -42,7 +42,7 @@ class _LoginPageState extends State<LoginPage> {
         pin: '',
         securityQuestion: '',
         securityAnswer: '',
-        parentPhone: '',
+        phone: '',
         parentEmail: '',
       ),
     );
