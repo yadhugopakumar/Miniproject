@@ -33,47 +33,6 @@ class _RegisterScreenState extends State<RegisterScreen> {
     _selectedQuestion = _questions[0];
   }
 
-  // void _register() async {
-  //   final name = _nameController.text.trim();
-  //   final pin = _pinController.text.trim();
-  //   final answer = _answerController.text.trim();
-  //   final parentPhone = _parentPhoneController.text.trim();
-  //   final parentEmail = _parentEmailController.text.trim();
-
-  //   if (name.isEmpty ||
-  //       pin.length != 4 ||
-  //       int.tryParse(pin) == null ||
-  //       answer.isEmpty ||
-  //       _selectedQuestion == null ||
-  //       parentPhone.isEmpty ||
-  //       parentEmail.isEmpty ||
-  //       !parentEmail.contains('@')) {
-  //     ScaffoldMessenger.of(context).showSnackBar(
-  //       const SnackBar(content: Text("Please fill all fields correctly.")),
-  //     );
-  //     return;
-  //   }
-
-  //   final userBox = Hive.box<UserSettings>('settingsBox');
-
-  //   final user = UserSettings(
-  //     username: name,
-  //     pin: pin,
-  //     alarmSound: 'alarm.mp3', // Default sound
-  //     securityQuestion: _selectedQuestion!,
-  //     securityAnswer: answer,
-  //     parentPhone: parentPhone,
-  //     parentEmail: parentEmail,
-  //   );
-
-  //   await userBox.put('user', user);
-
-  //   Navigator.pushReplacement(
-  //     context,
-  //     MaterialPageRoute(builder: (_) => const LockScreen()),
-  //   );
-  // }
-
   void _register() async {
     final name = _nameController.text.trim();
     final pin = _pinController.text.trim();
