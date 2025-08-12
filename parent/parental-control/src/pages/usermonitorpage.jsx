@@ -17,6 +17,7 @@ export default function ProfilePage() {
   const [editFormData, setEditFormData] = useState({
     username: "",
     age: "",
+    phone: "",
   });
 
 
@@ -45,6 +46,7 @@ export default function ProfilePage() {
     setEditFormData({
       username: child.username,
       age: child.age || "",
+      phone: child.child_phone,
     });
     setIsEditing(true);
   };
@@ -57,13 +59,59 @@ export default function ProfilePage() {
     setLoading(true);
     try {
       // Update child
+      const { username, age, phone } = editFormData;
+      // Name validation
+      if (!username.trim()) {
+        Swal.fire({
+          position: "top-end",
+          icon: "warning",
+          title: "Name cannot be empty.",
+          showConfirmButton: false,
+          timer: 1000
+        });
+        setLoading(false); // Make sure to stop loading if there's an error
+        return;
+      }
+
+      // Age validation
+      const parsedAge = parseInt(age, 10);
+      if (isNaN(parsedAge) || parsedAge < 1 || parsedAge > 100) {
+        Swal.fire({
+          position: "top-end",
+          icon: "warning",
+          title: "Please enter a valid age.",
+          showConfirmButton: false,
+          timer: 1000
+        });
+        setLoading(false);
+        return;
+      }
+
+      // Phone validation
+      if (!phone.trim() || !/^\d{10}$/.test(phone.trim())) {
+        Swal.fire({
+          position: "top-end",
+          icon: "warning",
+          title: "Please enter a valid 10-digit phone number.",
+          showConfirmButton: false,
+          timer: 1000
+        });
+        setLoading(false);
+        return;
+      }
+
+      // Proceed with the update if all validations pass
       const { error: updateError } = await supabase
         .from("child_users")
         .update({
-          username: editFormData.username.trim(),
-          age: editFormData.age ? parseInt(editFormData.age, 10) : null,
+          username: username.trim(),
+          age: parsedAge,
+          child_phone: phone.trim()
         })
         .eq("id", child.id);
+
+
+
 
       if (updateError) throw updateError;
 
@@ -190,7 +238,9 @@ export default function ProfilePage() {
           <p className="mb-2">
             <strong>Age:</strong> {child.age ?? "N/A"}
           </p>
-
+          <p className="mb-2">
+            <strong>Phone:</strong> {child.child_phone ?? "N/A"}
+          </p>
           <div className="mt-6 flex space-x-4">
             <button
               onClick={handleEdit}
@@ -262,6 +312,21 @@ export default function ProfilePage() {
               />
             </div>
             <div>
+              <label className="block font-semibold mb-1">Phone</label>
+              <input
+                type="tel"
+                name="phone"
+                value={editFormData.phone}
+                onChange={(e) =>
+                  setEditFormData({ ...editFormData, phone: e.target.value })
+                }
+                // pattern="[0-9]{10}" // adjust if you want country code
+                className="border rounded px-3 py-2 w-full"
+                required
+              />
+            </div>
+
+            <div>
               <label className="block font-semibold mb-1">Age</label>
               <input
                 type="number"
@@ -278,7 +343,14 @@ export default function ProfilePage() {
             <div className="flex justify-end space-x-3">
               <button
                 type="button"
-                onClick={() => setIsEditing(false)}
+                onClick={() => {
+                  setIsEditing(false);
+                  setEditFormData({
+                    username: "",
+                    age: "",
+                    phone: "",
+                  });
+                }}
                 className="px-4 py-2 rounded bg-gray-800 hover:bg-gray-600 text-white"
               >
                 Cancel

@@ -17,7 +17,8 @@ export default function Header({ onMemberAdded, onMedicineAdded }) {
   const [open, setOpen] = useState(false);
   const [showNewMemberModal, setShowNewMemberModal] = useState(false);
   const [username, setUsername] = useState("");
-  const [age, setAge] = useState(0);
+  const [phone,setPhone] =useState("")
+  const [age, setAge] = useState("");
   const [childUsers, setChildUsers] = useState([]);
   const menuRef = useRef(null);
 
@@ -236,13 +237,22 @@ export default function Header({ onMemberAdded, onMedicineAdded }) {
         });
         return;
       }
-
+      if (!phone.trim() || !/^\d{10}$/.test(phone.trim())) {
+        Swal.fire({
+          position: "top-end",
+          icon: "warning",
+          title: "Please enter a valid 10-digit phone number.",
+          showConfirmButton: false,
+          timer: 1000
+        });
+        return;
+      }
       // Check if username already exists for this parent
       const { data: existing, error: checkError } = await supabase
         .from("child_users")
-        .select("username")
+        .select("child_phone")
         .eq("parent_id", user.id)
-        .eq("username", username.trim())
+        .eq("child_phone", phone.trim())
         .maybeSingle();
 
       if (checkError) throw checkError;
@@ -251,7 +261,7 @@ export default function Header({ onMemberAdded, onMedicineAdded }) {
         Swal.fire({
           position: "top-end",
           icon: "warning",
-          title: "This name already exists.",
+          title: "This phone number is already assigned to another member",
           showConfirmButton: false,
           timer: 1000
         });
@@ -266,6 +276,7 @@ export default function Header({ onMemberAdded, onMedicineAdded }) {
             parent_id: user.id,
             username: username.trim(),
             age: parsedAge,
+            child_phone: phone.trim(), // new phone field
           },
         ])
         .select()
@@ -286,6 +297,7 @@ export default function Header({ onMemberAdded, onMedicineAdded }) {
 
       setUsername("");
       setAge("");
+      setPhone(""); // clear phone field
       setShowNewMemberModal(false);
 
     } catch (err) {
@@ -677,6 +689,20 @@ export default function Header({ onMemberAdded, onMedicineAdded }) {
                 />
               </div>
               <div className="mb-4">
+                <label className="block mb-1 text-gray-700">Phone Number</label>
+                <input
+                  type="tel"
+                  value={phone}
+                  onChange={(e) => setPhone(e.target.value)}
+                  required
+                  disabled={loading}
+                  pattern="[0-9]{10}" // validates a 10-digit number, adjust as needed
+                  className="w-full border border-gray-300 rounded px-3 py-2 focus:outline-none focus:ring focus:ring-green-300 disabled:bg-gray-100"
+                  placeholder="Enter child phone number"
+                />
+              </div>
+
+              <div className="mb-4">
                 <label className="block mb-1 text-gray-700">Age</label>
                 <input
                   type="number"
@@ -697,6 +723,7 @@ export default function Header({ onMemberAdded, onMedicineAdded }) {
                     setShowNewMemberModal(false);
                     setAge("");
                     setUsername("");
+                    setPhone("");
                   }}
                   disabled={loading}
                   className="px-4 py-2 bg-gray-600 rounded hover:bg-gray-400 disabled:opacity-50"
