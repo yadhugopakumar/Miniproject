@@ -1,8 +1,9 @@
-
 import 'package:flutter/material.dart';
 import 'package:medremind/bottomnavbar.dart';
 import 'package:pin_code_fields/pin_code_fields.dart';
 import '../../services/auth_services.dart';
+import '../../utils/customsnackbar.dart';
+import 'forgotpinpage.dart';
 
 class LockScreen extends StatefulWidget {
   const LockScreen({super.key});
@@ -22,9 +23,7 @@ class _LockScreenState extends State<LockScreen> {
         MaterialPageRoute(builder: (_) => const Bottomnavbar()),
       );
     } else {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Invalid PIN')),
-      );
+      AppSnackbar.show(context, message: "invalid PIN", success: false);
     }
   }
 
@@ -94,16 +93,18 @@ class _LockScreenState extends State<LockScreen> {
                 onCompleted: _verifyPin,
               ),
             ),
-            const SizedBox(height: 20),
             TextButton(
               onPressed: () {
-                // You can redirect to a forgot screen or show a dialog
-                ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(content: Text("Forgot PIN coming soon!")),
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                      builder: (context) => ForgotPinPage()),
                 );
               },
-              child: const Text('Forgot PIN?',
-                  style: TextStyle(color: Colors.white70, fontSize: 16)),
+              child: const Text(
+                'Forgot PIN?',
+                style: TextStyle(color: Colors.white70, fontSize: 16),
+              ),
             ),
           ],
         ),

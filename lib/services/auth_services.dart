@@ -14,6 +14,7 @@ class AuthService {
   }
 
 void register(
+  String childId,
   String name,
   String pin,
   String sound,
@@ -23,6 +24,7 @@ void register(
   String parentEmail,
 ) {
   _hive.saveUserSettings(UserSettings(
+    childId: childId,
     username: name,
     pin: pin,
     alarmSound: sound,

@@ -10,22 +10,26 @@ class UserSettings extends HiveObject {
   @HiveField(1)
   String pin;
   
-  @HiveField(5)
+  @HiveField(2)
   String ? phone;
 
-  @HiveField(6)
+  @HiveField(3)
   String ? parentEmail;
 
-  @HiveField(2)
+  @HiveField(4)
   String alarmSound;
 
-  @HiveField(3)
+  @HiveField(5)
   String securityQuestion;
 
-  @HiveField(4)
+  @HiveField(6)
   String securityAnswer;
 
+  @HiveField(7)
+  String childId;
+  
   UserSettings({
+    required this.childId,
     required this.username,
     required this.pin,
     required this.securityQuestion,

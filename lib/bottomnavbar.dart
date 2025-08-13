@@ -1,12 +1,15 @@
 import 'package:flutter/material.dart';
 import 'package:hive/hive.dart';
-import 'package:medremind/pages/auth/pinlogin.dart';
-import 'package:medremind/pages/auth/register.dart';
+import 'package:medremind/pages/auth/loginpage.dart';
 import 'package:medremind/pages/chatpage.dart';
 import 'package:medremind/pages/homepage.dart';
 import 'package:medremind/pages/innerpages/profilepage.dart';
 import 'package:medremind/pages/refillpage.dart';
 import 'package:medremind/pages/historypage.dart';
+
+import 'Hivemodel/history_entry.dart';
+import 'Hivemodel/medicine.dart';
+import 'Hivemodel/user_settings.dart';
 
 class Bottomnavbar extends StatefulWidget {
   final int initialIndex;
@@ -26,10 +29,10 @@ class _BottomnavbarState extends State<Bottomnavbar> {
   }
 
   final List<Widget> _pages = [
-    Homepage(),
+    const Homepage(),
     Chatpage(),
-    HistoryPage(),
-    RefillTrackerPage()
+    const HistoryPage(),
+    const RefillTrackerPage()
   ];
   bool isNotificationEnabled = true;
   @override
@@ -42,7 +45,7 @@ class _BottomnavbarState extends State<Bottomnavbar> {
           ? Padding(
               padding: const EdgeInsets.only(bottom: 9),
               child: Material(
-                color: Color.fromARGB(255, 93, 255, 101),
+                color: const Color.fromARGB(255, 93, 255, 101),
                 shape: RoundedRectangleBorder(
                   borderRadius: BorderRadius.circular(35),
                 ),
@@ -52,7 +55,7 @@ class _BottomnavbarState extends State<Bottomnavbar> {
                   width: 65.0,
                   child: FloatingActionButton(
                     // backgroundColor: Color.fromARGB(255, 75, 44, 90),
-                    backgroundColor: Color.fromARGB(255, 16, 59, 65),
+                    backgroundColor: const Color.fromARGB(255, 16, 59, 65),
 
                     onPressed: () {},
                     child: const Icon(
@@ -161,7 +164,7 @@ class _BottomnavbarState extends State<Bottomnavbar> {
         decoration: BoxDecoration(
           borderRadius: BorderRadius.circular(25),
           color: isSelected
-              ? Color.fromARGB(255, 165, 255, 123)
+              ? const Color.fromARGB(255, 165, 255, 123)
               : Colors.transparent,
         ),
         padding: const EdgeInsets.symmetric(horizontal: 2, vertical: 5),
@@ -173,12 +176,12 @@ class _BottomnavbarState extends State<Bottomnavbar> {
               icon,
               color: isSelected ? Colors.black : Colors.white,
             ),
-            SizedBox(height: 2),
+            const SizedBox(height: 2),
             Text(
               label,
               style: isSelected
-                  ? TextStyle(fontSize: 12, color: Colors.black)
-                  : TextStyle(
+                  ? const TextStyle(fontSize: 12, color: Colors.black)
+                  : const TextStyle(
                       fontSize: 12, color: Color.fromARGB(255, 240, 240, 240)),
             ),
           ],
@@ -254,7 +257,7 @@ class _BottomnavbarState extends State<Bottomnavbar> {
                 context,
                 const Text('Profile'),
                 Icons.person_pin,
-                Homepage(),
+                const Homepage(),
               ),
               // draweritem(
               //   context,
@@ -263,9 +266,9 @@ class _BottomnavbarState extends State<Bottomnavbar> {
               //   Chatpage(),
               // ),
               draweritem(context, const Text("Overall report"), Icons.report,
-                  HistoryPage()),
-              draweritem(
-                  context, const Text("Logout"), Icons.logout, Homepage()),
+                  const HistoryPage()),
+              draweritem(context, const Text("Logout"), Icons.logout,
+                  const Homepage()),
             ],
           ),
         ],
@@ -293,61 +296,62 @@ class _BottomnavbarState extends State<Bottomnavbar> {
                   showDialog(
                     context: innerContext,
                     builder: (context) => AlertDialog(
-                      backgroundColor: Colors.green[200], // Background color
+                      backgroundColor: const Color.fromARGB(
+                          255, 227, 255, 227), // Background color
                       shape: RoundedRectangleBorder(
                         borderRadius:
                             BorderRadius.circular(15), // Rounded corners
                       ),
-                      title: Text(
+                      title: const Text(
                         "Confirm Logout",
                         style: TextStyle(
                           fontWeight: FontWeight.bold,
                           fontSize: 20,
-                          color: Colors.green[900],
+                          color: Color.fromARGB(255, 61, 13, 1),
                         ),
                       ),
-                      content: Text(
+                      content: const Text(
                         "Are you sure you want to logout?",
                         style: TextStyle(
                           fontSize: 16,
-                          color: Colors.green[800],
+                          color: Color.fromARGB(255, 0, 0, 0),
                         ),
                       ),
                       actions: [
                         TextButton(
                           onPressed: () => Navigator.pop(context),
-                          child: Text("Cancel",
-                              style: TextStyle(color: Colors.green[900])),
+                          child: const Text(
+                            "Cancel",
+                            style: TextStyle(
+                                color: Color.fromARGB(255, 0, 0, 0),
+                                fontWeight: FontWeight.bold),
+                          ),
                         ),
                         TextButton(
                           onPressed: () async {
                             Navigator.pop(context); // Close dialog
 
-                            final sessionBox = Hive.box('session');
-                            await sessionBox.put('loggedIn', false);
+                            // Clear local Hive data
+                            // Clear Hive boxes
+                            await Hive.box<UserSettings>('settingsBox').clear();
+                            await Hive.box<Medicine>('medicinesBox').clear();
+                            await Hive.box<HistoryEntry>('historyBox').clear();
+                            await Hive.box('session').clear();
 
-                            // Check if user is already registered
-                            bool isRegistered = sessionBox.get('isRegistered',
-                                defaultValue: false);
+                            // Navigate to login page
 
-                            if (isRegistered) {
-                              // Go to PIN screen
-                              Navigator.pushReplacement(
-                                context,
-                                MaterialPageRoute(
-                                    builder: (_) => const LockScreen()),
-                              );
-                            } else {
-                              // Go to Register screen
-                              Navigator.pushReplacement(
-                                context,
-                                MaterialPageRoute(
-                                    builder: (_) => const RegisterScreen()),
-                              );
-                            }
+                            Navigator.pushReplacement(
+                              context,
+                              MaterialPageRoute(
+                                  builder: (_) => const LoginPage()),
+                            );
                           },
-                          child: Text("Logout",
-                              style: TextStyle(color: Colors.green[900])),
+                          child: const Text(
+                            "Logout",
+                            style: TextStyle(
+                                color: Color.fromARGB(255, 107, 0, 0),
+                                fontWeight: FontWeight.bold),
+                          ),
                         ),
                       ],
                     ),

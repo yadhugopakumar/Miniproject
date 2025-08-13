@@ -1,60 +1,10 @@
-//   void _register() async {
-//     final name = _nameController.text.trim();
-//     final pin = _pinController.text.trim();
-//     final answer = _answerController.text.trim();
-//     final phone = _phoneController.text.trim();
-//     final parentEmail = _parentEmailController.text.trim();
-
-//     if (name.isEmpty ||
-//         pin.length != 4 ||
-//         int.tryParse(pin) == null ||
-//         answer.isEmpty ||
-//         _selectedQuestion == null ||
-//         phone.isEmpty ||
-//         parentEmail.isEmpty ||
-//         !parentEmail.contains('@')) {
-//       ScaffoldMessenger.of(context).showSnackBar(
-//         const SnackBar(content: Text("Please fill all fields correctly.")),
-//       );
-//       return;
-//     }
-
-//     final userBox = Hive.box<UserSettings>('settingsBox');
-
-//     // ✅ Prevent duplicate usernames
-//     if (userBox.values.any((u) => u.username == name)) {
-//       ScaffoldMessenger.of(context).showSnackBar(
-//         const SnackBar(
-//             content: Text("Username already exists. Choose another.")),
-//       );
-//       return;
-//     }
-
-//     final user = UserSettings(
-//       username: name,
-//       pin: pin,
-//       alarmSound: 'alarm.mp3',
-//       securityQuestion: _selectedQuestion!,
-//       securityAnswer: answer,
-//       phone: phone,
-//       parentEmail: parentEmail,
-//     );
-
-//     await userBox.put('user',
-//         user); // You can make this .put(name, user) to use username as key
-
-//     Navigator.pushReplacement(
-//       context,
-//       MaterialPageRoute(builder: (_) => const LockScreen()),
-//     );
-//   }
-
 import 'package:flutter/material.dart';
 import 'package:hive/hive.dart';
 import 'package:medremind/pages/auth/loginpage.dart';
-import 'package:medremind/pages/auth/pinlogin.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../Hivemodel/user_settings.dart';
+import '../../utils/customsnackbar.dart';
+import '../../utils/successdialogue.dart';
 
 class RegisterScreen extends StatefulWidget {
   const RegisterScreen({super.key});
@@ -65,6 +15,7 @@ class RegisterScreen extends StatefulWidget {
 
 class _RegisterScreenState extends State<RegisterScreen> {
   bool _isLoading = false;
+  bool _obscurePin = true; // Add this in your State
 
   final _nameController = TextEditingController();
   final _pinController = TextEditingController();
@@ -88,9 +39,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
   }
 
   void _register() async {
-    setState(() {
-      _isLoading = true;
-    });
+    setState(() => _isLoading = true);
 
     final name = _nameController.text.trim();
     final pin = _pinController.text.trim();
@@ -98,6 +47,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
     final phone = _phoneController.text.trim();
     final parentEmail = _parentEmailController.text.trim();
 
+    // Basic validation
     if (name.isEmpty ||
         pin.length != 4 ||
         int.tryParse(pin) == null ||
@@ -106,74 +56,87 @@ class _RegisterScreenState extends State<RegisterScreen> {
         phone.isEmpty ||
         parentEmail.isEmpty ||
         !parentEmail.contains('@')) {
-      setState(() {
-        _isLoading = false;
-      });
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text("Please fill all fields correctly.")),
-      );
+      setState(() => _isLoading = false);
+
+      AppSnackbar.show(context,
+          message: "Please fill all fields correctly", success: false);
       return;
     }
 
+    // // Check local duplicate username
     final userBox = Hive.box<UserSettings>('settingsBox');
-
-    // Prevent duplicate usernames locally
-    if (userBox.values.any((u) => u.username == name)) {
-      setState(() {
-        _isLoading = false;
-      });
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-            content: Text("Username already exists. Choose another.")),
-      );
-      return;
-    }
+    // if (userBox.values.any((u) => u.username == name)) {
+    //   setState(() => _isLoading = false);
+    //   ScaffoldMessenger.of(context).showSnackBar(
+    //     const SnackBar(content: Text("Username already exists locally.")),
+    //   );
+    //   return;
+    // }
 
     final supabase = Supabase.instance.client;
+
     try {
-      // 1️⃣ Fetch child + parent's email with join
+      // 1️⃣ Fetch child + parent
       final result = await supabase
-          .from('child_with_parent')
-          .select()
+          .from('child_users')
+          .select('id, child_phone, parent:parent_profiles(email)')
           .eq('child_phone', phone)
           .maybeSingle();
 
-      if (result == null) {
-        setState(() {
-          _isLoading = false;
-        });
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text("Child phone not found.")),
-        );
+      if (result == null || result['parent'] == null) {
+        setState(() => _isLoading = false);
+
+        AppSnackbar.show(context,
+            message: "Child phone or linked parent not found", success: false);
         return;
       }
-      final fetchedParentEmail =
-          result['email']; // direct access from view column
+
+      final fetchedParentEmail = result['parent']?['email'];
+      final childId = result['id'];
 
       if (fetchedParentEmail == null || fetchedParentEmail != parentEmail) {
         setState(() => _isLoading = false);
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text("Parent email does not match.")),
-        );
+
+        AppSnackbar.show(context,
+            message: "Parent email does not match.", success: false);
         return;
       }
 
-      final insertRes = await supabase
+      // 2️⃣ Check in DB if this child is already registered in user_settings
+      final existingSettings = await supabase
+          .from('user_settings')
+          .select('id')
+          .eq('child_id', childId)
+          .maybeSingle();
+
+      if (existingSettings != null) {
+        setState(() => _isLoading = false);
+
+        AppSnackbar.show(context,
+            message: "User already registered. Please log in.", success: false);
+
+        return;
+      }
+
+      // 3️⃣ Insert new settings
+      final inserted = await supabase
           .from('user_settings')
           .insert({
-            'child_id': result['child_id'], // from view alias
+            'child_id': childId,
             'username': name,
-            'pin': pin, // hash in real app
-            'parent_phone': phone,
+            'pin': pin, // later hash in production
+            'phone': phone,
             'parent_email': fetchedParentEmail,
             'alarm_sound': 'alarm.mp3',
             'security_question': _selectedQuestion!,
             'security_answer': answer,
           })
           .select()
-          .single(); // throws if >1 or error
+          .maybeSingle();
 
-      // If it reached here, insert succeeded:
+      if (inserted == null) throw Exception("Insert returned null");
+
+      // 4️⃣ Save locally
       final user = UserSettings(
         username: name,
         pin: pin,
@@ -182,30 +145,28 @@ class _RegisterScreenState extends State<RegisterScreen> {
         securityAnswer: answer,
         phone: phone,
         parentEmail: fetchedParentEmail,
+        childId: childId, // ✅ use the variable you defined above
       );
-
       await userBox.put('user', user);
 
-      Navigator.pushReplacement(
-        context,
-        MaterialPageRoute(builder: (_) => const LockScreen()),
+      showDialog(
+        context: context,
+        builder: (_) => const SuccessDialog(
+          title: "Registration Success",
+          message:
+              "Your account has been created.enter the PIN to unloack app.",
+        ),
       );
     } on PostgrestException catch (e) {
-      setState(() => _isLoading = false);
-      debugPrint('Supabase error: ${e.message}');
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text("Failed to register: ${e.message}")),
-      );
+      debugPrint("Supabase error full: ${e.toJson()}");
+
+      AppSnackbar.show(context,
+          message: "Failed to register: Server Error", success: false);
     } catch (e) {
-      setState(() => _isLoading = false);
-      debugPrint('Unexpected error: $e');
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text("Unexpected error, please try again")),
-      );
+      AppSnackbar.show(context,
+          message: "Unexpected error, please try again", success: false);
     } finally {
-      setState(() {
-        _isLoading = false;
-      });
+      setState(() => _isLoading = false);
     }
   }
 
@@ -225,7 +186,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
                   // Icon
-                  CircleAvatar(
+                  const CircleAvatar(
                     radius: 60,
                     backgroundColor: iconGreen,
                     child: Icon(
@@ -322,13 +283,17 @@ class _RegisterScreenState extends State<RegisterScreen> {
 
                   const SizedBox(height: 16),
                   // PIN Field
+
                   TextField(
                     controller: _pinController,
-                    obscureText: true,
+                    obscureText: _obscurePin,
                     maxLength: 4,
                     keyboardType: TextInputType.number,
                     style: const TextStyle(
-                        color: Colors.white, letterSpacing: 16, fontSize: 22),
+                      color: Colors.white,
+                      letterSpacing: 16,
+                      fontSize: 22,
+                    ),
                     decoration: InputDecoration(
                       labelText: "4-digit PIN",
                       labelStyle: const TextStyle(color: Colors.white70),
@@ -340,8 +305,25 @@ class _RegisterScreenState extends State<RegisterScreen> {
                         borderSide: BorderSide.none,
                       ),
                       prefixIcon: const Icon(Icons.lock, color: Colors.white70),
+                      suffixIcon: Padding(
+                        padding: const EdgeInsets.all(8.0),
+                        child: IconButton(
+                          icon: Icon(
+                            _obscurePin
+                                ? Icons.visibility_off
+                                : Icons.visibility,
+                            color: Colors.white70,
+                          ),
+                          onPressed: () {
+                            setState(() {
+                              _obscurePin = !_obscurePin;
+                            });
+                          },
+                        ),
+                      ),
                     ),
                   ),
+
                   const SizedBox(height: 16),
                   // Security Question Dropdown
                   DropdownButtonFormField<String>(
