@@ -62,11 +62,12 @@ bool validateLogin(String username, String pin) {
   final user = box.values.firstWhere(
     (u) => u.username == username && u.pin == pin,
     orElse: () => UserSettings(
+      childId: '',
       username: '',
       pin: '',
       securityQuestion: '',
       securityAnswer: '',
-      parentPhone: '',
+      phone: '',
       parentEmail: '',
     ),
   );
@@ -75,6 +76,7 @@ bool validateLogin(String username, String pin) {
     final session = Hive.box('session');
     session.put('loggedIn', true);
     session.put('username', user.username);
+    session.put('childId', user.childId);
     session.put('isRegistered', true);
     return true;
   }

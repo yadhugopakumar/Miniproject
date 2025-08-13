@@ -10,27 +10,31 @@ class UserSettings extends HiveObject {
   @HiveField(1)
   String pin;
   
-  @HiveField(5)
-  String ? parentPhone;
-
-  @HiveField(6)
-  String ? parentEmail;
-
   @HiveField(2)
-  String alarmSound;
+  String ? phone;
 
   @HiveField(3)
-  String securityQuestion;
+  String ? parentEmail;
 
   @HiveField(4)
+  String alarmSound;
+
+  @HiveField(5)
+  String securityQuestion;
+
+  @HiveField(6)
   String securityAnswer;
 
+  @HiveField(7)
+  String childId;
+  
   UserSettings({
+    required this.childId,
     required this.username,
     required this.pin,
     required this.securityQuestion,
     required this.securityAnswer,
-     this.parentPhone,
+     this.phone,
      this.parentEmail,
     String? alarmSound,
   }) : alarmSound = alarmSound ?? 'default_alarm.mp3';

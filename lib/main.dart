@@ -1,8 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:hive_flutter/adapters.dart';
 import 'package:medremind/constants/constants.dart';
+import 'package:medremind/pages/auth/loginpage.dart';
 import 'package:medremind/pages/auth/pinlogin.dart';
-import 'package:medremind/pages/auth/register.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import 'Hivemodel/history_entry.dart';
@@ -38,8 +38,6 @@ class MyApp extends StatelessWidget {
     const String settingsBox = 'settingsBox';
     final Box<UserSettings> userBox = Hive.box<UserSettings>(settingsBox);
 
-    // final Box<UserSettings> userBox = Hive.box<UserSettings>(settingsBox);
-
     final bool isRegistered = userBox.isNotEmpty;
 
     return MaterialApp(
@@ -52,7 +50,7 @@ class MyApp extends StatelessWidget {
         scaffoldBackgroundColor: Colors.white,
       ),
       debugShowCheckedModeBanner: false,
-      home: isRegistered ? const LockScreen() : const RegisterScreen(),
+      home: isRegistered ? const LockScreen() : const LoginPage(),
     );
   }
 }
