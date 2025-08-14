@@ -2,8 +2,11 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:hive/hive.dart';
 import '../../Hivemodel/medicine.dart';
+import '../../Hivemodel/user_settings.dart';
 import '../../services/hive_services.dart';
+import '../../utils/customsnackbar.dart';
 import '../../utils/date_utils.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 
 class AddMedicinePage extends StatefulWidget {
   const AddMedicinePage({super.key});
@@ -18,7 +21,7 @@ class _AddMedicinePageState extends State<AddMedicinePage> {
   final _dosageController = TextEditingController();
   final _quantityController = TextEditingController();
   final _thresholdController = TextEditingController();
-
+  bool _isloading = false;
   DateTime? _selectedDate;
   int? _timesPerDay;
   List<TimeOfDay?> _doseTimes = [null, null, null, null];
@@ -48,19 +51,41 @@ class _AddMedicinePageState extends State<AddMedicinePage> {
   }
 
   Future<void> _saveMedicine() async {
-    bool allTimesSelected = _timesPerDay != null &&
-        List.generate(_timesPerDay!, (i) => _doseTimes[i])
-            .every((t) => t != null);
+    setState(() => _isloading = true);
 
-    if (_formKey.currentState!.validate() &&
-        _selectedDate != null &&
-        _timesPerDay != null &&
-        allTimesSelected) {
+    try {
+      // 1️⃣ Get local user settings
+      final userBox = Hive.box<UserSettings>('settingsBox');
+      final userSettings = userBox.get('user');
+      if (userSettings == null) {
+        setState(() => _isloading = false);
+        AppSnackbar.show(context,
+            message: "No user found. Please log in again.", success: false);
+        return;
+      }
+      final childId = userSettings.childId;
+
+      // 2️⃣ Validate form & selections
+      bool allTimesSelected = _timesPerDay != null &&
+          List.generate(_timesPerDay!, (i) => _doseTimes[i])
+              .every((t) => t != null);
+
+      if (!_formKey.currentState!.validate() ||
+          _selectedDate == null ||
+          _timesPerDay == null ||
+          !allTimesSelected) {
+        setState(() => _isloading = false);
+        AppSnackbar.show(context,
+            message: "Please fill all fields and select proper timings.",
+            success: false);
+        return;
+      }
+
+      // 3️⃣ Prepare medicine data
       final intakeTimes = List.generate(
         _timesPerDay!,
         (i) => timeOfDayToString(_doseTimes[i]!),
       );
-
       final name = _nameController.text.trim();
       final dosage = _dosageController.text.trim();
 
@@ -70,36 +95,50 @@ class _AddMedicinePageState extends State<AddMedicinePage> {
             med.name.toLowerCase() == name.toLowerCase() &&
             med.dosage == dosage,
       );
-
       if (alreadyExists) {
-        showDialog(
-          context: context,
-          builder: (context) => AlertDialog(
-            title: const Text("Duplicate Medicine"),
-            content: Text("Medicine \"$name\" already exists."),
-            actions: [
-              TextButton(
-                onPressed: () => Navigator.pop(context),
-                child: const Text("OK"),
-              ),
-            ],
-          ),
-        );
-        return; // Stop here
+        setState(() => _isloading = false);
+        AppSnackbar.show(context,
+            message: "Medicine \"$name\" already exists.", success: false);
+        return;
       }
+  // 5️⃣ Save to Supabase
+      final supabase = Supabase.instance.client;
+      final response = await supabase.from('medicine').insert({
+        'child_id': childId,
+        'name': name,
+        'dosage': dosage,
+        'expiry_date': _selectedDate!.toIso8601String(),
+        'daily_intake_times': intakeTimes,
+        'total_quantity': int.parse(_quantityController.text),
+        'quantity_left': int.parse(_quantityController.text),
+        'refill_threshold': int.parse(_thresholdController.text),
+        'created_at': DateTime.now().toIso8601String(),
+      }).select();
+
+      if (response.isEmpty) {
+        setState(() => _isloading = false);
+        AppSnackbar.show(context,
+            message: "Error saving to server.", success: false);
+        return;
+      }
+      // 6️⃣ Create local Medicine object
+      // Use the ID from Supabase response if needed
 
       final medicine = Medicine(
+        id: response[0]['id'],
         name: name,
-        dosage: _dosageController.text.trim(),
+        dosage: dosage,
         expiryDate: _selectedDate!,
         dailyIntakeTimes: intakeTimes,
         totalQuantity: int.parse(_quantityController.text),
         quantityLeft: int.parse(_quantityController.text),
         refillThreshold: int.parse(_thresholdController.text),
       );
+      // 4️⃣ Save to Hive first
+      await medicineBox.add(medicine);
 
-      medicineBox.add(medicine);
-
+    
+      // 6️⃣ (Optional) Schedule notifications
       for (final timeStr in medicine.dailyIntakeTimes) {
         final parts = timeStr.split(':');
         final hour = int.parse(parts[0]);
@@ -115,7 +154,6 @@ class _AddMedicinePageState extends State<AddMedicinePage> {
         ))) {
           scheduledTime = scheduledTime.add(const Duration(days: 1));
         }
-
         scheduledTime = DateTime(
           scheduledTime.year,
           scheduledTime.month,
@@ -124,9 +162,11 @@ class _AddMedicinePageState extends State<AddMedicinePage> {
           minute,
         );
 
-        // Schedule notification here if needed
+        // TODO: Schedule notification here
       }
 
+      // 7️⃣ Show success
+      setState(() => _isloading = false);
       showDialog(
         context: context,
         builder: (context) => AlertDialog(
@@ -156,21 +196,16 @@ class _AddMedicinePageState extends State<AddMedicinePage> {
           ],
         ),
       );
-    } else {
-      showDialog(
-        context: context,
-        builder: (context) => AlertDialog(
-          title: const Text("Error"),
-          content:
-              const Text("Please fill all fields and select proper timings."),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(context),
-              child: const Text("OK"),
-            ),
-          ],
-        ),
-      );
+    } on PostgrestException catch (e) {
+      debugPrint("Supabase insert error: ${e.message}");
+      AppSnackbar.show(context,
+          message: "Error saving to server: ${e.message}", success: false);
+      return;
+    } catch (e, stack) {
+      debugPrint("Unexpected error: $e\n$stack");
+      setState(() => _isloading = false);
+      AppSnackbar.show(context,
+          message: "Unexpected error occurred.", success: false);
     }
   }
 
@@ -204,7 +239,7 @@ class _AddMedicinePageState extends State<AddMedicinePage> {
               TextFormField(
                 controller: _dosageController,
                 decoration: InputDecoration(
-                  labelText: 'Dosage (e.g. 500mg)',
+                  labelText: 'Dosage (e.g. 1pill)',
                   prefixIcon:
                       Icon(Icons.format_list_numbered, color: mainGreen),
                 ),
@@ -303,15 +338,18 @@ class _AddMedicinePageState extends State<AddMedicinePage> {
                     borderRadius: BorderRadius.circular(12),
                   ),
                 ),
-                child: const Text(
-                  "Save",
-                  style: TextStyle(
-                    fontSize: 18,
-                    fontWeight: FontWeight.bold,
-                    color: Colors.white,
-                    letterSpacing: 1.1,
-                  ),
-                ),
+                child: _isloading
+                    ? const CircularProgressIndicator(
+                        color: Colors.white, strokeWidth: 2)
+                    : const Text(
+                        "Save",
+                        style: TextStyle(
+                          fontSize: 18,
+                          fontWeight: FontWeight.bold,
+                          color: Colors.white,
+                          letterSpacing: 1.1,
+                        ),
+                      ),
               ),
             ],
           ),

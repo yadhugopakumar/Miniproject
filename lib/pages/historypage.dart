@@ -76,6 +76,7 @@ class _HistoryPageState extends State<HistoryPage> {
                   child: Text(filter),
                 );
               }).toList(),
+              
             ),
           ),
           // History List
@@ -122,10 +123,13 @@ class _HistoryPageState extends State<HistoryPage> {
                           child: Column(
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
-                              Text(date,
-                                  style: const TextStyle(
-                                      fontWeight: FontWeight.bold,
-                                      fontSize: 16)),
+                              Padding(
+                                padding: const EdgeInsets.all(3.0),
+                                child: Text("Date: "+date,
+                                    style: const TextStyle(
+                                        fontWeight: FontWeight.bold,
+                                        fontSize: 16),),
+                              ),
                               const Divider(),
                               ...meds.map((entry) {
                                 // Split medicineName into name and time if needed
@@ -165,6 +169,7 @@ class _HistoryPageState extends State<HistoryPage> {
               },
             ),
           ),
+          SizedBox(height: 50,)
         ],
       ),
     );

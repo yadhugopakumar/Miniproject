@@ -41,95 +41,168 @@ class _HomepageStateContent extends State<Homepage> {
   Widget build(BuildContext context) {
     const Color backgroundGreen = Color(0xFF166D5B);
     final historyBox = Hive.box<HistoryEntry>('historyBox');
-    return CustomScrollView(
-      slivers: [
-        _buildAppBar(),
-        SliverToBoxAdapter(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              ValueListenableBuilder<Box<Medicine>>(
-                valueListenable:
-                    Hive.box<Medicine>('medicinesBox').listenable(),
-                builder: (context, box, _) {
-                  final meds = box.values.toList();
-                  int totalDoses = 0, takenCount = 0;
-                  final todayMeds = <_TodaySchedule>[];
-                  for (var med in meds) {
-                    for (final time in med.dailyIntakeTimes) {
-                      totalDoses++;
-                      final isDoseTaken =
-                          _isTaken(med.name, time, today, historyBox);
-                      if (isDoseTaken) takenCount++;
-                      todayMeds.add(_TodaySchedule(
-                        medicine: med,
-                        time: time,
-                        dosage: med.dosage,
-                        taken: isDoseTaken,
-                      ));
+
+    Future<void> _refreshData() async {
+      await fetchAndStoreTodaysMedicines(); // call your Supabase fetch
+      setState(() {}); // rebuild UI with updated Hive data
+    }
+
+    return RefreshIndicator(
+      onRefresh: _refreshData,
+      child: CustomScrollView(
+        slivers: [
+          _buildAppBar(),
+          SliverToBoxAdapter(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                ValueListenableBuilder<Box<Medicine>>(
+                  valueListenable:
+                      Hive.box<Medicine>('medicinesBox').listenable(),
+                  builder: (context, box, _) {
+                    final meds = box.values.toList();
+                    int totalDoses = 0, takenCount = 0;
+                    final todayMeds = <_TodaySchedule>[];
+                    for (var med in meds) {
+                      for (final time in med.dailyIntakeTimes) {
+                        totalDoses++;
+                        final isDoseTaken =
+                            _isTaken(med.name, time, today, historyBox);
+                        if (isDoseTaken) takenCount++;
+                        todayMeds.add(_TodaySchedule(
+                          medicine: med,
+                          time: time,
+                          dosage: med.dosage,
+                          taken: isDoseTaken,
+                        ));
+                      }
                     }
-                  }
-                  double progress =
-                      (totalDoses > 0) ? takenCount / totalDoses : 0;
-                  return Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      _buildProgressBar(progress, takenCount, totalDoses),
-                      _buildQuickActions(context, backgroundGreen),
-                      const Padding(
-                        padding:
-                            EdgeInsets.only(left: 20.0, bottom: 3, top: 16),
-                        child: Text("Today's Schedule",
-                            style: TextStyle(
-                                fontSize: 18, fontWeight: FontWeight.bold)),
-                      ),
-                      const SizedBox(height: 10),
-                    ],
-                  );
-                },
-              ),
-            ],
+                    double progress =
+                        (totalDoses > 0) ? takenCount / totalDoses : 0;
+                    return Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        _buildProgressBar(progress, takenCount, totalDoses),
+                        _buildQuickActions(context, backgroundGreen),
+                        const Padding(
+                          padding:
+                              EdgeInsets.only(left: 20.0, bottom: 3, top: 16),
+                          child: Text("Today's Schedule",
+                              style: TextStyle(
+                                  fontSize: 18, fontWeight: FontWeight.bold)),
+                        ),
+                        const SizedBox(height: 10),
+                      ],
+                    );
+                  },
+                ),
+              ],
+            ),
           ),
-        ),
-        ValueListenableBuilder<Box<Medicine>>(
-          valueListenable: Hive.box<Medicine>('medicinesBox').listenable(),
-          builder: (context, box, _) {
-            final meds = box.values.toList();
-            final todayMeds = <_TodaySchedule>[];
-            final historyBox = Hive.box<HistoryEntry>('historyBox');
-            for (var med in meds) {
-              for (final time in med.dailyIntakeTimes) {
-                todayMeds.add(_TodaySchedule(
-                  medicine: med,
-                  time: time,
-                  dosage: med.dosage,
-                  taken: _isTaken(med.name, time, today, historyBox),
-                ));
+          ValueListenableBuilder<Box<Medicine>>(
+            valueListenable: Hive.box<Medicine>('medicinesBox').listenable(),
+            builder: (context, box, _) {
+              final meds = box.values.toList();
+              final todayMeds = <_TodaySchedule>[];
+              final historyBox = Hive.box<HistoryEntry>('historyBox');
+
+              for (var med in meds) {
+                for (final time in med.dailyIntakeTimes) {
+                  todayMeds.add(_TodaySchedule(
+                    medicine: med,
+                    time: time,
+                    dosage: med.dosage,
+                    taken: _isTaken(med.name, time, today, historyBox),
+                  ));
+                }
               }
-            }
-            return SliverList(
-              delegate: SliverChildBuilderDelegate(
-                (context, index) {
-                  final sched = todayMeds[index];
-                  final timeFormatted = _formatTime(
-                    TimeOfDay(
-                      hour: int.parse(sched.time.split(':')[0]),
-                      minute: int.parse(sched.time.split(':')[1]),
-                    ),
-                    context,
+              List<_TodaySchedule> sortMedicines(List<_TodaySchedule> meds) {
+                final now = DateTime.now();
+
+                meds.sort((a, b) {
+                  // Convert schedule times to DateTime for today
+                  DateTime timeA = DateTime(
+                    now.year,
+                    now.month,
+                    now.day,
+                    int.parse(a.time.split(':')[0]),
+                    int.parse(a.time.split(':')[1]),
+                  );
+                  DateTime timeB = DateTime(
+                    now.year,
+                    now.month,
+                    now.day,
+                    int.parse(b.time.split(':')[0]),
+                    int.parse(b.time.split(':')[1]),
                   );
 
-                  return _scheduleTile(
-                    context,
-                    medicine: sched.medicine.name,
-                    dosage: sched.dosage,
-                    time: timeFormatted,
-                    taken: sched.taken,
-                    backgroundGreen: backgroundGreen,
-                    onTap: () async {
+                  // Determine categories
+                  int catA = a.taken
+                      ? 1 // Taken → last
+                      : now.isAfter(timeA)
+                          ? 2 // Missed → middle
+                          : 0; // Incoming → first
+
+                  int catB = b.taken
+                      ? 2
+                      : now.isAfter(timeB)
+                          ? 1
+                          : 0;
+
+                  // First sort by category (incoming → missed → taken)
+                  if (catA != catB) return catA.compareTo(catB);
+
+                  // Then by time (earlier times first)
+                  return timeA.compareTo(timeB);
+                });
+
+                return meds;
+              }
+
+              // ✅ sort AFTER filling the list
+              final sortedMeds = sortMedicines(todayMeds);
+
+              return SliverList(
+                delegate: SliverChildBuilderDelegate(
+                  (context, index) {
+                    // final sched = todayMeds[index];
+                    final sched = sortedMeds[index];
+                    final timeFormatted = _formatTime(
+                      TimeOfDay(
+                        hour: int.parse(sched.time.split(':')[0]),
+                        minute: int.parse(sched.time.split(':')[1]),
+                      ),
+                      context,
+                    );
+
+// Determine if the dose is missed
+                    final now = DateTime.now();
+                    final doseTimeParts = sched.time.split(':');
+                    final doseDateTime = DateTime(
+                      today.year,
+                      today.month,
+                      today.day,
+                      int.parse(doseTimeParts[0]),
+                      int.parse(doseTimeParts[1]),
+                    );
+
+                    final isMissed = now.isAfter(doseDateTime) && !sched.taken;
+
+                    return _scheduleTile(context,
+                        medicine: sched.medicine.name,
+                        dosage: sched.dosage,
+                        time: isMissed ? 'Missed' : timeFormatted,
+                        taken: sched.taken,
+                        backgroundGreen: backgroundGreen,
+                        isMissed: isMissed, // pass it here
+                        onTap: () async {
                       final confirm = await showDialog<bool>(
                         context: context,
                         builder: (_) => AlertDialog(
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                          backgroundColor: Color.fromARGB(255, 244, 255, 251),
                           title: const Text("Mark Dose as Taken"),
                           content: const Text(
                               "Do you want to mark this dose as taken?"),
@@ -172,6 +245,7 @@ class _HomepageStateContent extends State<Homepage> {
 
                         ScaffoldMessenger.of(context).showSnackBar(
                           const SnackBar(
+                            duration: Duration(seconds: 1),
                             content: Text(
                               'Marked as taken!',
                               style: TextStyle(color: Colors.black),
@@ -185,16 +259,16 @@ class _HomepageStateContent extends State<Homepage> {
 
                         setState(() {});
                       }
-                    },
-                  );
-                },
-                childCount: todayMeds.length,
-              ),
-            );
-          },
-        ),
-        const SliverToBoxAdapter(child: SizedBox(height: 130)),
-      ],
+                    });
+                  },
+                  childCount: todayMeds.length,
+                ),
+              );
+            },
+          ),
+          const SliverToBoxAdapter(child: SizedBox(height: 130)),
+        ],
+      ),
     );
   }
 
@@ -399,30 +473,60 @@ class _HomepageStateContent extends State<Homepage> {
     required bool taken,
     required VoidCallback onTap,
     required Color backgroundGreen,
+    bool isMissed = false, // NEW PARAM
   }) {
     return Card(
+      color: taken ? Color.fromARGB(255, 214, 245, 255) : Colors.white,
       elevation: 6,
       shadowColor: Colors.green.withOpacity(0.7),
       margin: const EdgeInsets.symmetric(horizontal: 18, vertical: 6),
       child: ListTile(
         leading: Icon(
           Icons.medication_liquid,
-          color: Colors.green[700],
+          color: isMissed ? Colors.red : Colors.green[700],
           size: 30,
         ),
-        title: Text("${medicine} - ${dosage}mg",
-            style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w500)),
-        subtitle:
-            Text(time, style: TextStyle(fontSize: 13, color: Colors.grey[600])),
-        trailing: ElevatedButton(
-          onPressed: taken ? null : onTap,
-          style: ElevatedButton.styleFrom(
-            backgroundColor: taken ? backgroundGreen : Colors.yellow[700],
-            foregroundColor: taken ? Colors.white : Colors.black,
-            shape:
-                RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        title: Text(
+          "$medicine ($dosage ${int.tryParse(dosage) == 1 ? 'pill' : 'pills'})",
+          style: TextStyle(
+            fontSize: 16,
+            fontWeight: FontWeight.w500,
+            decoration: isMissed ? TextDecoration.lineThrough : null,
+            color: isMissed ? Colors.grey[700] : null,
           ),
-          child: Text(taken ? "Taken" : "Take"),
+        ),
+        subtitle: Text(
+          time,
+          style: TextStyle(
+            fontSize: 13,
+            color: isMissed ? Colors.red[700] : Colors.grey[600],
+            fontWeight: isMissed ? FontWeight.bold : FontWeight.normal,
+          ),
+        ),
+        trailing: ElevatedButton(
+          onPressed: (taken || isMissed) ? null : onTap,
+          style: ElevatedButton.styleFrom(
+            backgroundColor: taken
+                ? backgroundGreen
+                : isMissed
+                    ? Colors.red[400]
+                    : Colors.yellow[600],
+            foregroundColor: Colors.white,
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(20),
+            ),
+          ),
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 8.0),
+            child: Text(
+              taken
+                  ? "Taken"
+                  : isMissed
+                      ? "Missed"
+                      : "Take",
+              style: TextStyle(color: Colors.black),
+            ),
+          ),
         ),
       ),
     );

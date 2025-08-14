@@ -79,7 +79,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
       // 1️⃣ Fetch child + parent
       final result = await supabase
           .from('child_users')
-          .select('id, child_phone, parent:parent_profiles(email)')
+          .select('id, child_phone,parent_id parent:parent_profiles(email)')
           .eq('child_phone', phone)
           .maybeSingle();
 
@@ -93,6 +93,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
 
       final fetchedParentEmail = result['parent']?['email'];
       final childId = result['id'];
+      final parentId = result['parent_id'];
 
       if (fetchedParentEmail == null || fetchedParentEmail != parentEmail) {
         setState(() => _isLoading = false);
@@ -138,6 +139,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
 
       // 4️⃣ Save locally
       final user = UserSettings(
+        parentId:parentId,
         username: name,
         pin: pin,
         alarmSound: 'alarm.mp3',

@@ -62,6 +62,7 @@ class _LoginPageState extends State<LoginPage> {
 
       // Map response data to UserSettings model
       final userSettings = UserSettings(
+        parentId: response['parent_id'] ?? '',
         username: response['username'] ?? '',
         pin: response['pin'] ?? '', // Store hashed if implemented
         alarmSound: response['alarm_sound'] ?? 'default_alarm.mp3',

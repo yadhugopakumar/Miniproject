@@ -117,6 +117,7 @@ class _ForgotPinPageState extends State<ForgotPinPage> {
       final localUser = userBox.get('user');
       if (localUser != null) {
         final updatedUser = UserSettings(
+          parentId: localUser.parentId,
             username: localUser.username,
             pin: newPin,
             alarmSound: localUser.alarmSound,

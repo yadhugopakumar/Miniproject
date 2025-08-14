@@ -23,8 +23,11 @@ class Medicine extends HiveObject {
 
   @HiveField(7)
   int refillThreshold; // Alert if quantityLeft <= threshold
+  @HiveField(8)
+  String id; // instead of int id
 
   Medicine({
+    required this.id,
     required this.name,
     required this.dosage,
     required this.expiryDate,
