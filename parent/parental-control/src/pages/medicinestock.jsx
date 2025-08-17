@@ -200,6 +200,10 @@ export default function MedicineStockPage() {
             <div className="animate-spin rounded-full h-20 w-20 border-t-5 border-green-600"></div>
             <span className="mt-4 text-gray-700 font-medium">Loading Medicines ...</span>
           </div>
+        ) : medicines.length === 0 ? (
+          <div className="h-[60vh] flex flex-col items-center justify-center text-gray-600">
+            <span className="text-lg font-medium">No records found</span>
+          </div>
         ) : (
           <div className="overflow-x-auto custom-scroll">
             <table className="min-w-full border border-gray-300">
