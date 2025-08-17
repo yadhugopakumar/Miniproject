@@ -89,7 +89,7 @@ export default function Login() {
       provider: "google",
       options: {
         // redirectTo: window.location.origin
-        redirectTo: `${window.location.origin}/authcallback`,
+        redirectTo: `${window.location.origin}/`,
       }
     });
     if (error) {

@@ -30,29 +30,40 @@ export default function MedicineStockPage() {
     fetchMedicines();
   }, []);
 
+
   async function fetchMedicines(userId = "") {
     setLoading(true);
+
+    // get parentId from session/localStorage (set at login)
+    const parentId = sessionStorage.getItem("user_id");
     let query = supabase
       .from("medicine")
       .select(`
         *,
         child_users(username)
       `)
+      .eq("parent_id", parentId) // ✅ only fetch medicines created by this parent
       .order("created_at", { ascending: false });
-
+     
+ 
     if (userId) {
-      query = query.eq("child_id", userId);
+      query = query.eq("child_id", userId); // optional filter by child
     }
 
-    let { data, error } = await query;
+    const { data, error } = await query;
     if (!error) setMedicines(data);
+    console.log(medicines);
+    
     setLoading(false);
   }
+
 
   async function fetchUsers() {
     let { data, error } = await supabase
       .from("child_users")
-      .select("id, username");
+      .select("id, username").eq("parent_id", sessionStorage.getItem("user_id"))
+      .order("username", { ascending: true });
+
     if (!error) setUsers(data);
   }
   // ----fetch medicines and users on startup-----------
@@ -199,6 +210,10 @@ export default function MedicineStockPage() {
           <div className="h-[60vh] flex flex-col items-center justify-center">
             <div className="animate-spin rounded-full h-20 w-20 border-t-5 border-green-600"></div>
             <span className="mt-4 text-gray-700 font-medium">Loading Medicines ...</span>
+          </div>
+        ) : medicines.length === 0 ? (
+          <div className="h-[60vh] flex flex-col items-center justify-center text-gray-600">
+            <span className="text-lg font-medium">No records found</span>
           </div>
         ) : (
           <div className="overflow-x-auto custom-scroll">
