@@ -5,7 +5,7 @@ import { FaUserCircle } from "react-icons/fa";
 import { IoPersonAddSharp } from "react-icons/io5";
 import { FaPills } from "react-icons/fa6";
 import { supabase } from "../supabase/supabase-client"; //  supabase client
-import { Link } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import { useLocation } from "react-router-dom";
 import { IoAdd } from "react-icons/io5";
 import { GrClose } from "react-icons/gr";
@@ -14,10 +14,14 @@ import { showError, showSuccess } from "../utils/alert"; // for my custom alerts
 
 
 export default function Header({ onMemberAdded, onMedicineAdded }) {
+
+  const navigate = useNavigate();
+
+
   const [open, setOpen] = useState(false);
   const [showNewMemberModal, setShowNewMemberModal] = useState(false);
   const [username, setUsername] = useState("");
-  const [phone,setPhone] =useState("")
+  const [phone, setPhone] = useState("")
   const [age, setAge] = useState("");
   const [childUsers, setChildUsers] = useState([]);
   const menuRef = useRef(null);
@@ -40,30 +44,34 @@ export default function Header({ onMemberAdded, onMedicineAdded }) {
   };
 
   // Fetch profile on modal open
-  // ------------modal showing mehod for profile start-----------------------
+  // ------------modal showing method for profile start-----------------------
+
   useEffect(() => {
     if (!showProfileModal) return;
     let mounted = true;
 
     (async function fetchProfile() {
       try {
-        openProfileModal()
+        openProfileModal();
         // keep loading already true from openProfileModal
-        const { data: { user }, error: userError } = await supabase.auth.getUser();
-        if (!mounted) return;
 
-        if (userError || !user) {
-          setError(userError?.message || "No user logged in");
+        // const parentId = sessionStorage.getItem("user_id");
+        const { data: { user } } = await supabase.auth.getUser();
+        console.log(user);
+        
+        const parentId = user?.id; // use user id from session
+
+        if (!mounted || !user) {
+          setError("No user logged in");
           setLoadingProfile(false);
           return;
         }
 
         const { data, error } = await supabase
           .from("parent_profiles")
-          .select("full_name, phone, email")
-          .eq("id", user.id)
-          .single();
-
+          .select("*")
+          .eq("id", parentId)   // ✅ use parentId from session
+          .maybeSingle();
         if (!mounted) return;
 
         if (error) {
@@ -71,6 +79,7 @@ export default function Header({ onMemberAdded, onMedicineAdded }) {
           setProfile({ name: "", mobile: "", email: "" });
         } else {
           setProfile({
+
             name: data?.full_name || "",
             mobile: data?.phone || "",
             email: data?.email || ""
@@ -85,6 +94,7 @@ export default function Header({ onMemberAdded, onMedicineAdded }) {
 
     return () => { mounted = false; };
   }, [showProfileModal]);
+
   // ------------modal showing mehod for profile end-----------------------
 
 
@@ -167,7 +177,7 @@ export default function Header({ onMemberAdded, onMedicineAdded }) {
     async function fetchChildUsers() {
       const { data, error } = await supabase
         .from("child_users")
-        .select("id, username")
+        .select("id, username").eq("parent_id", sessionStorage.getItem("user_id"))
         .order("username", { ascending: true });
 
       if (error) {
@@ -482,6 +492,7 @@ export default function Header({ onMemberAdded, onMedicineAdded }) {
       cancelButtonText: "Cancel"
     }).then(async (result) => {
       if (result.isConfirmed) {
+        sessionStorage.removeItem("user_id");
         await supabase.auth.signOut();
         Swal.fire({
           title: "Logged out",

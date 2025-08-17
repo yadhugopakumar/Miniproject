@@ -23,8 +23,7 @@ export default function Home() {
   useEffect(() => {
     async function fetchData() {
       setLoading(true);
-      setError(null);
-
+      setError(null);      
       // Get current user once
       const {
         data: { user },
@@ -36,7 +35,7 @@ export default function Home() {
         setLoading(false);
         return;
       }
-
+      sessionStorage.setItem("user_id", user.id); 
       try {
         // Run queries in parallel
         const [membersResponse, countResponse] = await Promise.all([
