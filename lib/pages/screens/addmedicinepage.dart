@@ -218,6 +218,8 @@ class _AddMedicinePageState extends State<AddMedicinePage> {
         title:
             const Text('New Medicine', style: TextStyle(color: Colors.white)),
         backgroundColor: Colors.green[700],
+            centerTitle: true,
+
       ),
       body: SingleChildScrollView(
         padding: const EdgeInsets.all(24),

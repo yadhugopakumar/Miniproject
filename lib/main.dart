@@ -6,6 +6,7 @@ import 'package:medremind/pages/auth/pinlogin.dart';
 // import 'package:path_provider/path_provider.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
+import 'Hivemodel/health_report.dart';
 import 'Hivemodel/history_entry.dart';
 import 'Hivemodel/medicine.dart';
 import 'Hivemodel/user_settings.dart';
@@ -18,6 +19,9 @@ Future<void> main() async {
   Hive.registerAdapter(UserSettingsAdapter());
   Hive.registerAdapter(MedicineAdapter());
   Hive.registerAdapter(HistoryEntryAdapter());
+  Hive.registerAdapter(HealthReportAdapter());
+
+  await Hive.openBox<HealthReport>('healthReportsBox');
 
   await Hive.openBox<UserSettings>('settingsBox');
   await Hive.openBox<Medicine>('medicinesBox');

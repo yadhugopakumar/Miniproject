@@ -2,6 +2,7 @@ import 'package:intl/intl.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:hive_flutter/hive_flutter.dart';
 
+import '../Hivemodel/health_report.dart';
 import '../Hivemodel/medicine.dart';
 import '../Hivemodel/user_settings.dart';
 
@@ -66,4 +67,42 @@ Future<void> fetchAndStoreTodaysMedicines() async {
   }
 
   print("Today's medicines fetched & stored in Hive.");
+}
+
+
+Future<void> syncHealthReportsToHive(String childId) async {
+final hiveBox = Hive.box<HealthReport>('healthReportsBox');
+  final supabase = Supabase.instance.client;
+  if (hiveBox.isNotEmpty) {
+    return; // Already cached
+  }
+
+  final response = await supabase
+      .from('health_reports')
+      .select()
+      .eq('child_id', childId)
+      .order('report_date', ascending: false);
+
+  if (response == []  && response.isNotEmpty) {
+    for (var row in response) {
+      final report = HealthReport(
+        childId: row['child_id'],
+        reportDate: DateTime.parse(row['report_date']),
+        systolic: row['report_type'] == 'systolic'
+            ? row['value'] ?? 0
+            : 0,
+        diastolic: row['report_type'] == 'diastolic'
+            ? row['value'] ?? 0
+            : 0,
+        cholesterol: row['report_type'] == 'cholesterol'
+            ? row['value'] ?? 0
+            : 0,
+        notes: row['notes'] ?? '',
+        id: row['id'],
+      );
+      await hiveBox.add(report);
+    }
+  } else {
+    print("⚠️ No health reports found for child: $childId");
+  }
 }

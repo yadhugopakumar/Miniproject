@@ -7,8 +7,10 @@ class Profilepage extends StatelessWidget {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: Text(name),
+        title: Text(name,style: TextStyle(fontWeight: FontWeight.bold),),
         backgroundColor: Colors.green[800],
+            centerTitle: true,
+
       ),
       body: Center(
           child: Column(mainAxisAlignment: MainAxisAlignment.center, children: [
