@@ -81,7 +81,9 @@ class _LoginPageState extends State<LoginPage> {
       Hive.box('session').put('username', userSettings.username);
       Hive.box('session').put('childId', userSettings.childId);
 
+      // final session = Hive.box('session');
 
+      // print(session.get('childId'));
       // Navigate to the PIN page (or desired page)
       setState(() => _isloginLoading = false);
 

@@ -1,422 +1,9 @@
-// import 'package:flutter/material.dart';
-// import 'package:fl_chart/fl_chart.dart';
-// import 'package:hive_flutter/adapters.dart';
-// import 'package:medremind/Hivemodel/user_settings.dart';
-// import 'package:supabase_flutter/supabase_flutter.dart';
-
-// import '../../Hivemodel/health_report.dart';
-
-// class Reportspage extends StatefulWidget {
-//   const Reportspage({super.key});
-//   @override
-//   State<Reportspage> createState() => _ReportspageState();
-// }
-
-// class _ReportspageState extends State<Reportspage> {
-//   late Box<HealthReport> hiveBox;
-
-//   @override
-//   void initState() {
-//     super.initState();
-//     hiveBox = Hive.box<HealthReport>('healthReportsBox');
-//   }
-
-//   @override
-//   void dispose() {
-//     hiveBox.close();
-//     super.dispose();
-//   }
-
-//   // Add or update a report in Hive
-//   // Future<void> _saveReport(
-//   //     {HealthReport? toEdit, int? index, required HealthReport report}) async {
-//   //   if (toEdit == null) {
-//   //     await hiveBox.add(report);
-//   //   } else if (index != null) {
-//   //     final key = hiveBox.keyAt(index);
-//   //     await hiveBox.put(key, report);
-//   //   }
-//   //   setState(() {}); // re-render, ValueListenableBuilder will also update UI
-//   // }
-//   Future<void> addHealthReport( HealthReport report) async {
-//     final hiveBox = Hive.box<HealthReport>('healthReportsBox');
-//     final userbox = Hive.box<UserSettings>('userSettingsBox');
-//     final childId = userbox.get('childId');
-
-//     final supabase = Supabase.instance.client;
-//     // Insert into Supabase
-//     final response = await supabase
-//         .from('health_reports')
-//         .insert({
-//           'child_id': childId,
-//           'report_date': report.date.toIso8601String(),
-//           'systolic': report.systolic,
-//           'diastolic': report.diastolic,
-//           'cholesterol': report.cholesterol,
-//           'notes': report.notes,
-//         })
-//         .select()
-//         .single();
-
-//     if (response == null) {
-//       // Save in Hive with id from Supabase
-//       report.id = response['id'].toString();
-//       hiveBox.add(report);
-//     }
-//   }
-
-//   // Delete a report from Hive
-//   Future<void> _deleteReport(int index) async {
-//     final key = hiveBox.keyAt(index);
-//     await hiveBox.delete(key);
-//     setState(() {});
-//   }
-
-//   void _showReportForm({HealthReport? toEdit, int? index}) async {
-//     final _formKey = GlobalKey<FormState>();
-//     final systolicCtrl =
-//         TextEditingController(text: toEdit?.systolic.toString() ?? '');
-//     final diastolicCtrl =
-//         TextEditingController(text: toEdit?.diastolic.toString() ?? '');
-//     final cholCtrl =
-//         TextEditingController(text: toEdit?.cholesterol.toString() ?? '');
-//     final notesCtrl = TextEditingController(text: toEdit?.notes ?? '');
-
-//     await showDialog(
-//       context: context,
-//       builder: (context) => AlertDialog(
-//         title: Text(
-//             toEdit == null ? 'Add New Health Report' : 'Edit Health Report'),
-//         content: SingleChildScrollView(
-//           child: Form(
-//             key: _formKey,
-//             child: Column(
-//               children: [
-//                 TextFormField(
-//                   controller: systolicCtrl,
-//                   decoration: const InputDecoration(labelText: 'Systolic BP'),
-//                   keyboardType: TextInputType.number,
-//                   validator: (val) =>
-//                       (val == null || val.isEmpty) ? 'Required' : null,
-//                 ),
-//                 TextFormField(
-//                   controller: diastolicCtrl,
-//                   decoration: const InputDecoration(labelText: 'Diastolic BP'),
-//                   keyboardType: TextInputType.number,
-//                   validator: (val) =>
-//                       (val == null || val.isEmpty) ? 'Required' : null,
-//                 ),
-//                 TextFormField(
-//                   controller: cholCtrl,
-//                   decoration: const InputDecoration(labelText: 'Cholesterol'),
-//                   keyboardType: TextInputType.number,
-//                   validator: (val) =>
-//                       (val == null || val.isEmpty) ? 'Required' : null,
-//                 ),
-//                 TextFormField(
-//                   controller: notesCtrl,
-//                   decoration: const InputDecoration(labelText: 'Notes'),
-//                   maxLines: 2,
-//                   validator: (val) =>
-//                       (val == null || val.isEmpty) ? 'Required' : null,
-//                 ),
-//               ],
-//             ),
-//           ),
-//         ),
-//         actions: [
-//           TextButton(
-//             onPressed: () => Navigator.pop(context),
-//             child: const Text('Cancel'),
-//           ),
-//           ElevatedButton(
-//             onPressed: () {
-//               if (_formKey.currentState!.validate()) {
-//                 final report = HealthReport(
-
-//                   date: toEdit?.date ?? DateTime.now(),
-//                   systolic: int.parse(systolicCtrl.text),
-//                   diastolic: int.parse(diastolicCtrl.text),
-//                   cholesterol: int.parse(cholCtrl.text),
-//                   notes: notesCtrl.text,
-//                 );
-//                 addHealthReport(report.id);
-//                 Navigator.pop(context);
-//               }
-//             },
-//             child: Text(toEdit == null ? 'Add' : 'Save'),
-//           ),
-//         ],
-//       ),
-//     );
-//   }
-
-//   List<FlSpot> _spotsFor(List<int> values) {
-//     return List.generate(values.length, (i) {
-//       return FlSpot(i.toDouble(), values[i].toDouble());
-//     });
-//   }
-
-//   void _confirmDelete(int index) {
-//     showDialog(
-//       context: context,
-//       builder: (ctx) => AlertDialog(
-//         title: const Text('Delete Report'),
-//         content:
-//             const Text('Are you sure you want to delete this health report?'),
-//         actions: [
-//           TextButton(
-//             onPressed: () => Navigator.pop(ctx),
-//             child: const Text('Cancel'),
-//           ),
-//           TextButton(
-//             onPressed: () {
-//               _deleteReport(index);
-//               Navigator.pop(ctx);
-//             },
-//             child: const Text('Delete', style: TextStyle(color: Colors.red)),
-//           ),
-//         ],
-//       ),
-//     );
-//   }
-
-//   Widget _legendItem(Color color, String label) {
-//     return Row(
-//       children: [
-//         Container(
-//           width: 14,
-//           height: 14,
-//           decoration: BoxDecoration(
-//             color: color,
-//             shape: BoxShape.circle,
-//           ),
-//         ),
-//         const SizedBox(width: 6),
-//         Text(label, style: const TextStyle(fontSize: 13)),
-//       ],
-//     );
-//   }
-
-//   @override
-//   Widget build(BuildContext context) {
-//     return Scaffold(
-//       appBar: AppBar(
-//         backgroundColor: Colors.green[800],
-//         title: const Text(
-//           "Health Tracker",
-//           style: TextStyle(fontWeight: FontWeight.bold),
-//         ),
-//         centerTitle: true,
-//       ),
-//       floatingActionButton: FloatingActionButton(
-//         backgroundColor: Colors.redAccent,
-//         child: const Icon(Icons.add),
-//         onPressed: () => _showReportForm(),
-//         tooltip: "Add New Report",
-//       ),
-//       body: ValueListenableBuilder(
-//         valueListenable: hiveBox.listenable(),
-//         builder: (context, Box<HealthReport> box, _) {
-//           final reports = box.values.toList();
-//           return Padding(
-//             padding: const EdgeInsets.all(16.0),
-//             child: reports.isEmpty
-//                 ? const Center(
-//                     child: Text("No health reports yet.",
-//                         style: TextStyle(fontSize: 16)))
-//                 : Column(
-//                     crossAxisAlignment: CrossAxisAlignment.start,
-//                     children: [
-//                       // Trend Chart
-//                       const SizedBox(
-//                         height: 18,
-//                       ),
-//                       SizedBox(
-//                         height: 250,
-//                         child: Card(
-//                           color: Colors.green[50],
-//                           elevation: 2,
-//                           margin: const EdgeInsets.only(bottom: 20),
-//                           child: Padding(
-//                             padding: const EdgeInsets.all(8.0),
-//                             child: LineChart(
-//                               LineChartData(
-//                                 titlesData: FlTitlesData(
-//                                   bottomTitles: AxisTitles(
-//                                     sideTitles: SideTitles(
-//                                       showTitles: true,
-//                                       getTitlesWidget: (value, meta) {
-//                                         int index = value.toInt();
-//                                         if (index < 0 ||
-//                                             index >= reports.length) {
-//                                           return Container();
-//                                         }
-//                                         final date = reports[index].date;
-//                                         return Text(
-//                                           "${date.day}/${date.month}",
-//                                           style: const TextStyle(fontSize: 10),
-//                                         );
-//                                       },
-//                                     ),
-//                                   ),
-//                                   leftTitles: const AxisTitles(
-//                                     sideTitles: SideTitles(
-//                                       showTitles: true,
-//                                       interval: 20,
-//                                       reservedSize: 35,
-//                                     ),
-//                                   ),
-//                                   topTitles: AxisTitles(
-//                                     sideTitles: SideTitles(showTitles: false),
-//                                   ),
-//                                   rightTitles: AxisTitles(
-//                                     sideTitles: SideTitles(showTitles: false),
-//                                   ),
-//                                 ),
-//                                 borderData: FlBorderData(show: true),
-//                                 lineBarsData: [
-//                                   LineChartBarData(
-//                                     spots: _spotsFor(reports
-//                                         .map((e) => e.systolic)
-//                                         .toList()),
-//                                     isCurved: true,
-//                                     color: Colors.red,
-//                                     barWidth: 3,
-//                                     dotData: FlDotData(show: true),
-//                                   ),
-//                                   LineChartBarData(
-//                                     spots: _spotsFor(reports
-//                                         .map((e) => e.diastolic)
-//                                         .toList()),
-//                                     isCurved: true,
-//                                     color: Colors.blue,
-//                                     barWidth: 3,
-//                                     dotData: FlDotData(show: true),
-//                                   ),
-//                                   LineChartBarData(
-//                                     spots: _spotsFor(reports
-//                                         .map((e) => e.cholesterol)
-//                                         .toList()),
-//                                     isCurved: true,
-//                                     color: Colors.green,
-//                                     barWidth: 3,
-//                                     dotData: FlDotData(show: true),
-//                                   ),
-//                                 ],
-//                                 lineTouchData: LineTouchData(
-//                                   enabled: true,
-//                                   touchTooltipData: LineTouchTooltipData(
-//                                     tooltipBgColor: Colors.black87,
-//                                     tooltipRoundedRadius: 8,
-//                                     tooltipMargin:
-//                                         16, // Increase for more spacing below/above marker
-//                                     fitInsideHorizontally: true,
-//                                     fitInsideVertically: true,
-//                                     getTooltipItems: (touchedSpots) {
-//                                       return touchedSpots.map((spot) {
-//                                         String label;
-//                                         if (spot.barIndex == 0) {
-//                                           label = 'Systolic BP';
-//                                         } else if (spot.barIndex == 1) {
-//                                           label = 'Diastolic BP';
-//                                         } else if (spot.barIndex == 2) {
-//                                           label = 'Cholesterol';
-//                                         } else {
-//                                           label = 'Value';
-//                                         }
-
-//                                         return LineTooltipItem(
-//                                           '$label: ${spot.y.toInt()}',
-//                                           const TextStyle(
-//                                             color: Colors.white,
-//                                             fontWeight: FontWeight.bold,
-//                                           ),
-//                                         );
-//                                       }).toList();
-//                                     },
-//                                   ),
-//                                 ),
-//                               ),
-//                             ),
-//                           ),
-//                         ),
-//                       ),
-//                       Padding(
-//                           padding: const EdgeInsets.symmetric(vertical: 12.0),
-//                           child: Row(
-//                             mainAxisAlignment: MainAxisAlignment.center,
-//                             children: [
-//                               _legendItem(Colors.red, 'Systolic BP'),
-//                               const SizedBox(width: 16),
-//                               _legendItem(Colors.blue, 'Diastolic BP'),
-//                               const SizedBox(width: 16),
-//                               _legendItem(Colors.green, 'Cholesterol'),
-//                             ],
-//                           )),
-//                       Padding(
-//                         padding: const EdgeInsets.symmetric(vertical: 10.0),
-//                         child: const Text("Past Health Reports:",
-//                             style: TextStyle(
-//                                 fontSize: 18, fontWeight: FontWeight.bold)),
-//                       ),
-//                       Expanded(
-//                         child: ListView.builder(
-//                           itemCount: reports.length,
-//                           itemBuilder: (context, i) {
-//                             final report = reports[i];
-//                             return Card(
-//                               color: Colors.green[50],
-//                               margin: const EdgeInsets.symmetric(vertical: 6),
-//                               child: ListTile(
-//                                 leading: const Icon(Icons.assignment_outlined,
-//                                     color: Colors.red),
-//                                 title: Text(
-//                                   "BP: ${report.systolic}/${report.diastolic} | Chol: ${report.cholesterol}",
-//                                   style: const TextStyle(
-//                                       fontWeight: FontWeight.bold),
-//                                 ),
-//                                 subtitle: Text(
-//                                     "${report.notes}\n${report.date.toLocal().toString().substring(0, 16)}"),
-//                                 trailing: Row(
-//                                   mainAxisSize: MainAxisSize.min,
-//                                   children: [
-//                                     IconButton(
-//                                       icon: const Icon(Icons.edit,
-//                                           color: Colors.blue),
-//                                       tooltip: "Edit",
-//                                       onPressed: () => _showReportForm(
-//                                           toEdit: report, index: i),
-//                                     ),
-//                                     IconButton(
-//                                       icon: const Icon(Icons.delete,
-//                                           color: Colors.red),
-//                                       tooltip: "Delete",
-//                                       onPressed: () => _confirmDelete(i),
-//                                     ),
-//                                   ],
-//                                 ),
-//                               ),
-//                             );
-//                           },
-//                         ),
-//                       ),
-//                     ],
-//                   ),
-//           );
-//         },
-//       ),
-//     );
-//   }
-//
 import 'package:fl_chart/fl_chart.dart';
 import 'package:flutter/material.dart';
-import 'package:hive/hive.dart';
 import 'package:hive_flutter/adapters.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../../Hivemodel/health_report.dart';
-import '../../Hivemodel/user_settings.dart';
 
 class Reportspage extends StatefulWidget {
   const Reportspage({super.key});
@@ -430,11 +17,11 @@ class _ReportspageState extends State<Reportspage> {
   final session = Hive.box('session');
 
   bool _busy = false;
-
   @override
   void initState() {
     super.initState();
     _hiveBox = Hive.box<HealthReport>('healthReportsBox');
+    _syncFromSupabase(); // fetch on load
   }
 
   String? _getChildId() {
@@ -549,11 +136,10 @@ class _ReportspageState extends State<Reportspage> {
           .eq('child_id', childId)
           .order('report_date', ascending: true);
 
-      await _hiveBox.clear();
-
       for (final row in rows) {
-        final r = HealthReport(
-          id: row['id'].toString(),
+        final id = row['id'].toString();
+        final newReport = HealthReport(
+          id: id,
           childId: row['child_id'] as String,
           reportDate: DateTime.parse(row['report_date'] as String),
           systolic: row['systolic'] as String?,
@@ -561,9 +147,10 @@ class _ReportspageState extends State<Reportspage> {
           cholesterol: row['cholesterol'] as String?,
           notes: row['notes'] as String,
         );
-        await _hiveBox.put(r.id, r);
+
+        // If report already exists, update it; else insert
+        await _hiveBox.put(id, newReport);
       }
-      _toast('Synced from cloud');
     } catch (e) {
       _toast('Sync failed: $e');
     } finally {
@@ -683,13 +270,6 @@ class _ReportspageState extends State<Reportspage> {
         title: const Text('Health Tracker',
             style: TextStyle(fontWeight: FontWeight.bold)),
         centerTitle: true,
-        actions: [
-          IconButton(
-            tooltip: 'Sync from cloud',
-            onPressed: _busy ? null : _syncFromSupabase,
-            icon: const Icon(Icons.refresh),
-          ),
-        ],
         backgroundColor: Colors.green[800],
       ),
       floatingActionButton: FloatingActionButton(
@@ -701,228 +281,239 @@ class _ReportspageState extends State<Reportspage> {
                 strokeWidth: 2, color: Colors.white)
             : const Icon(Icons.add),
       ),
-      body: ValueListenableBuilder(
-        valueListenable: _hiveBox.listenable(),
-        builder: (context, Box<HealthReport> box, _) {
-          final reports = box.values.toList();
+      body: RefreshIndicator(
+        onRefresh: _syncFromSupabase,
+        child: ValueListenableBuilder(
+          // This is the only one you need
+          valueListenable: _hiveBox.listenable(),
+          builder: (context, Box<HealthReport> box, _) {
+            final reports = box.values.toList();
 
-          // Convert nullable string readings to doubles with fallback
-          List<double> systolicValues = reports
-              .map((r) => double.tryParse(r.systolic ?? '') ?? 0)
-              .toList();
-          List<double> diastolicValues = reports
-              .map((r) => double.tryParse(r.diastolic ?? '') ?? 0)
-              .toList();
-          List<double> cholesterolValues = reports
-              .map((r) => double.tryParse(r.cholesterol ?? '') ?? 0)
-              .toList();
+            // Convert nullable string readings to doubles with fallback
+            List<double> systolicValues = reports
+                .map((r) => double.tryParse(r.systolic ?? '') ?? 0)
+                .toList();
+            List<double> diastolicValues = reports
+                .map((r) => double.tryParse(r.diastolic ?? '') ?? 0)
+                .toList();
+            List<double> cholesterolValues = reports
+                .map((r) => double.tryParse(r.cholesterol ?? '') ?? 0)
+                .toList();
 
-          return Padding(
-            padding: const EdgeInsets.all(16.0),
-            child: reports.isEmpty
-                ? const Center(
-                    child: Text("No health reports yet.",
-                        style: TextStyle(fontSize: 16)),
-                  )
-                : Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      const SizedBox(height: 12),
-                      SizedBox(
-                        height: 260,
-                        child: Card(
-                          color: Colors.green[50],
-                          elevation: 2,
-                          margin: const EdgeInsets.only(bottom: 16),
-                          child: Padding(
-                            padding: const EdgeInsets.all(8.0),
-                            child: LineChart(
-                              LineChartData(
-                                minY: 0,
-                                titlesData: FlTitlesData(
-                                  bottomTitles: AxisTitles(
-                                    sideTitles: SideTitles(
-                                      showTitles: true,
-                                      interval: 1,
-                                      getTitlesWidget: (value, meta) {
-                                        final i = value.toInt();
-                                        if (i < 0 || i >= reports.length) {
-                                          return const SizedBox.shrink();
-                                        }
-                                        final d = reports[i].reportDate;
-                                        return Padding(
-                                          padding:
-                                              const EdgeInsets.only(top: 4.0),
-                                          child: Text('${d.day}/${d.month}',
-                                              style: const TextStyle(
-                                                  fontSize: 10)),
-                                        );
+            return Padding(
+              padding: const EdgeInsets.all(16.0),
+              child: reports.isEmpty
+                  ? const Center(
+                      child: Text("No health reports yet.",
+                          style: TextStyle(fontSize: 16)),
+                    )
+                  : Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        const SizedBox(height: 12),
+                        SizedBox(
+                          height: 260,
+                          child: Card(
+                            color: Colors.green[50],
+                            elevation: 2,
+                            margin: const EdgeInsets.only(bottom: 16),
+                            child: Padding(
+                              padding: const EdgeInsets.all(10.0),
+                              child: LineChart(
+                                LineChartData(
+                                  minY: 0,
+                                  titlesData: FlTitlesData(
+                                    bottomTitles: AxisTitles(
+                                      sideTitles: SideTitles(
+                                        showTitles: true,
+                                        interval: 1,
+                                        getTitlesWidget: (value, meta) {
+                                          final i = value.toInt();
+                                          if (i < 0 || i >= reports.length) {
+                                            return const SizedBox.shrink();
+                                          }
+                                          final d = reports[i].reportDate;
+                                          return Padding(
+                                            padding:
+                                                const EdgeInsets.only(top: 4.0),
+                                            child: Text('${d.day}/${d.month}',
+                                                style: const TextStyle(
+                                                    fontSize: 10)),
+                                          );
+                                        },
+                                      ),
+                                    ),
+                                    leftTitles: const AxisTitles(
+                                      sideTitles: SideTitles(
+                                          showTitles: true,
+                                          interval: 20,
+                                          reservedSize: 36),
+                                    ),
+                                    topTitles: const AxisTitles(
+                                        sideTitles:
+                                            SideTitles(showTitles: false)),
+                                    rightTitles: const AxisTitles(
+                                        sideTitles:
+                                            SideTitles(showTitles: false)),
+                                  ),
+                                  gridData: const FlGridData(
+                                    show: true,
+                                    horizontalInterval: 20,
+                                  ),
+                                  borderData: FlBorderData(show: true),
+                                  lineBarsData: [
+                                    LineChartBarData(
+                                      spots: _spotsFor(systolicValues),
+                                      isCurved: true,
+                                      color: Colors.red,
+                                      barWidth: 3,
+                                      dotData: FlDotData(show: true),
+                                    ),
+                                    LineChartBarData(
+                                      spots: _spotsFor(diastolicValues),
+                                      isCurved: true,
+                                      color: Colors.blue,
+                                      barWidth: 3,
+                                      dotData: FlDotData(show: true),
+                                    ),
+                                    LineChartBarData(
+                                      spots: _spotsFor(cholesterolValues),
+                                      isCurved: true,
+                                      color: Colors.green,
+                                      barWidth: 3,
+                                      dotData: FlDotData(show: true),
+                                    ),
+                                  ],
+                                  lineTouchData: LineTouchData(
+                                    enabled: true,
+                                    touchTooltipData: LineTouchTooltipData(
+                                      tooltipBgColor: Colors.black87,
+                                      tooltipHorizontalAlignment:
+                                          FLHorizontalAlignment.left,
+                                      tooltipMargin:
+                                          -80, // Adjust this value to position the tooltip higher
+                                      getTooltipItems: (touchedSpots) {
+                                        return touchedSpots.map((spot) {
+                                          final label = switch (spot.barIndex) {
+                                            0 => 'S-BP',
+                                            1 => 'D-BP',
+                                            2 => 'Chol',
+                                            _ => 'Value',
+                                          };
+                                          return LineTooltipItem(
+                                            '$label: ${spot.y.toInt()}',
+                                            const TextStyle(
+                                                fontSize: 10,
+                                                color: Colors.white,
+                                                fontWeight: FontWeight.bold),
+                                          );
+                                        }).toList();
                                       },
                                     ),
-                                  ),
-                                  leftTitles: const AxisTitles(
-                                    sideTitles: SideTitles(
-                                        showTitles: true,
-                                        interval: 20,
-                                        reservedSize: 36),
-                                  ),
-                                  topTitles: const AxisTitles(
-                                      sideTitles:
-                                          SideTitles(showTitles: false)),
-                                  rightTitles: const AxisTitles(
-                                      sideTitles:
-                                          SideTitles(showTitles: false)),
-                                ),
-                                gridData: const FlGridData(
-                                  show: true,
-                                  horizontalInterval: 20,
-                                ),
-                                borderData: FlBorderData(show: true),
-                                lineBarsData: [
-                                  LineChartBarData(
-                                    spots: _spotsFor(systolicValues),
-                                    isCurved: true,
-                                    color: Colors.red,
-                                    barWidth: 3,
-                                    dotData: FlDotData(show: true),
-                                  ),
-                                  LineChartBarData(
-                                    spots: _spotsFor(diastolicValues),
-                                    isCurved: true,
-                                    color: Colors.blue,
-                                    barWidth: 3,
-                                    dotData: FlDotData(show: true),
-                                  ),
-                                  LineChartBarData(
-                                    spots: _spotsFor(cholesterolValues),
-                                    isCurved: true,
-                                    color: Colors.green,
-                                    barWidth: 3,
-                                    dotData: FlDotData(show: true),
-                                  ),
-                                ],
-                                lineTouchData: LineTouchData(
-                                  enabled: true,
-                                  touchTooltipData: LineTouchTooltipData(
-                                    tooltipBgColor: Colors.black87,
-                                    getTooltipItems: (touchedSpots) {
-                                      return touchedSpots.map((spot) {
-                                        final label = switch (spot.barIndex) {
-                                          0 => 'Systolic BP',
-                                          1 => 'Diastolic BP',
-                                          2 => 'Cholesterol',
-                                          _ => 'Value',
-                                        };
-                                        return LineTooltipItem(
-                                          '$label: ${spot.y.toInt()}',
-                                          const TextStyle(
-                                              color: Colors.white,
-                                              fontWeight: FontWeight.bold),
-                                        );
-                                      }).toList();
-                                    },
                                   ),
                                 ),
                               ),
                             ),
                           ),
                         ),
-                      ),
-                      Padding(
-                        padding: const EdgeInsets.symmetric(vertical: 8.0),
-                        child: Row(
-                          mainAxisAlignment: MainAxisAlignment.center,
-                          children: [
-                            _legendItem(Colors.red, 'Systolic BP'),
-                            const SizedBox(width: 16),
-                            _legendItem(Colors.blue, 'Diastolic BP'),
-                            const SizedBox(width: 16),
-                            _legendItem(Colors.green, 'Cholesterol'),
-                          ],
+                        Padding(
+                          padding: const EdgeInsets.symmetric(vertical: 8.0),
+                          child: Row(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            children: [
+                              _legendItem(Colors.red, 'Systolic BP'),
+                              const SizedBox(width: 16),
+                              _legendItem(Colors.blue, 'Diastolic BP'),
+                              const SizedBox(width: 16),
+                              _legendItem(Colors.green, 'Cholesterol'),
+                            ],
+                          ),
                         ),
-                      ),
-                      const Padding(
-                        padding: EdgeInsets.symmetric(vertical: 8.0),
-                        child: Text("Past Health Reports:",
-                            style: TextStyle(
-                                fontSize: 18, fontWeight: FontWeight.bold)),
-                      ),
-                      Expanded(
-                        child: ListView.builder(
-                          itemCount: reports.length,
-                          itemBuilder: (context, i) {
-                            final r = reports[i];
-                            return Card(
-                              color: Colors.green[50],
-                              margin: const EdgeInsets.symmetric(vertical: 6),
-                              child: ListTile(
-                                leading: const Icon(Icons.assignment_outlined,
-                                    color: Colors.red),
-                                title: Text(
-                                  "BP: ${r.systolic}/${r.diastolic} | Chol: ${r.cholesterol}",
-                                  style: const TextStyle(
-                                      fontWeight: FontWeight.bold),
-                                ),
-                                subtitle: Text(
-                                    "${r.notes}\n${r.reportDate.toLocal().toString().substring(0, 16)}"),
-                                trailing: Row(
-                                  mainAxisSize: MainAxisSize.min,
-                                  children: [
-                                    IconButton(
-                                      icon: const Icon(Icons.edit,
-                                          color: Colors.blue),
-                                      tooltip: "Edit",
-                                      onPressed: _busy
-                                          ? null
-                                          : () => _showReportForm(
-                                              toEdit: r, index: i),
-                                    ),
-                                    IconButton(
-                                      icon: const Icon(Icons.delete,
-                                          color: Colors.red),
-                                      tooltip: "Delete",
-                                      onPressed: _busy
-                                          ? null
-                                          : () => showDialog(
-                                                context: context,
-                                                builder: (_) => AlertDialog(
-                                                  title: const Text(
-                                                      'Delete Report'),
-                                                  content: const Text(
-                                                      'Are you sure you want to delete this report?'),
-                                                  actions: [
-                                                    TextButton(
-                                                        onPressed: () =>
-                                                            Navigator.pop(
-                                                                context),
+                        const Padding(
+                          padding: EdgeInsets.symmetric(vertical: 12.0),
+                          child: Text("Past Health Reports:",
+                              style: TextStyle(
+                                  fontSize: 18, fontWeight: FontWeight.bold)),
+                        ),
+                        Expanded(
+                          child: ListView.builder(
+                            itemCount: reports.length,
+                            itemBuilder: (context, i) {
+                              final r = reports[i];
+                              return Card(
+                                color: Colors.green[50],
+                                margin: const EdgeInsets.symmetric(vertical: 6),
+                                child: ListTile(
+                                  leading: const Icon(Icons.assignment_outlined,
+                                      color: Colors.red),
+                                  title: Text(
+                                    "BP: ${r.systolic}/${r.diastolic} | Chol: ${r.cholesterol}",
+                                    style: const TextStyle(
+                                        fontWeight: FontWeight.bold),
+                                  ),
+                                  subtitle: Text(
+                                      "${r.notes}\n${r.reportDate.toLocal().toString().substring(0, 16)}"),
+                                  trailing: Row(
+                                    mainAxisSize: MainAxisSize.min,
+                                    children: [
+                                      IconButton(
+                                        icon: const Icon(Icons.edit,
+                                            color: Colors.blue),
+                                        tooltip: "Edit",
+                                        onPressed: _busy
+                                            ? null
+                                            : () => _showReportForm(
+                                                toEdit: r, index: i),
+                                      ),
+                                      IconButton(
+                                        icon: const Icon(Icons.delete,
+                                            color: Colors.red),
+                                        tooltip: "Delete",
+                                        onPressed: _busy
+                                            ? null
+                                            : () => showDialog(
+                                                  context: context,
+                                                  builder: (_) => AlertDialog(
+                                                    title: const Text(
+                                                        'Delete Report'),
+                                                    content: const Text(
+                                                        'Are you sure you want to delete this report?'),
+                                                    actions: [
+                                                      TextButton(
+                                                          onPressed: () =>
+                                                              Navigator.pop(
+                                                                  context),
+                                                          child: const Text(
+                                                              'Cancel')),
+                                                      TextButton(
+                                                        onPressed: () async {
+                                                          Navigator.pop(
+                                                              context);
+                                                          await _deleteReport(
+                                                              i);
+                                                        },
                                                         child: const Text(
-                                                            'Cancel')),
-                                                    TextButton(
-                                                      onPressed: () async {
-                                                        Navigator.pop(context);
-                                                        await _deleteReport(i);
-                                                      },
-                                                      child: const Text(
-                                                          'Delete',
-                                                          style: TextStyle(
-                                                              color:
-                                                                  Colors.red)),
-                                                    ),
-                                                  ],
+                                                            'Delete',
+                                                            style: TextStyle(
+                                                                color: Colors
+                                                                    .red)),
+                                                      ),
+                                                    ],
+                                                  ),
                                                 ),
-                                              ),
-                                    ),
-                                  ],
+                                      ),
+                                    ],
+                                  ),
                                 ),
-                              ),
-                            );
-                          },
+                              );
+                            },
+                          ),
                         ),
-                      ),
-                    ],
-                  ),
-          );
-        },
+                      ],
+                    ),
+            );
+          },
+        ),
       ),
     );
   }
