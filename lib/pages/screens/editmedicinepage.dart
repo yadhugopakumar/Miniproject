@@ -1,7 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:hive/hive.dart';
-
+import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../Hivemodel/medicine.dart';
+import '../../utils/customsnackbar.dart';
 
 class EditMedicinePage extends StatefulWidget {
   final Medicine medicine;
@@ -18,6 +19,8 @@ class EditMedicinePage extends StatefulWidget {
 }
 
 class _EditMedicinePageState extends State<EditMedicinePage> {
+  bool _isediting = false;
+
   late TextEditingController _nameController;
   late TextEditingController _dosageController;
   late TextEditingController _stockController;
@@ -88,7 +91,11 @@ class _EditMedicinePageState extends State<EditMedicinePage> {
     }
   }
 
+
   void _saveChanges() async {
+    setState(() {
+      _isediting = true;
+    });
     bool allTimesSelected = _timesPerDay != null &&
         List.generate(_timesPerDay!, (i) => _doseTimes[i])
             .every((t) => t != null);
@@ -99,65 +106,64 @@ class _EditMedicinePageState extends State<EditMedicinePage> {
         _selectedDate != null &&
         _timesPerDay != null &&
         allTimesSelected) {
-      final box = await Hive.openBox<Medicine>('medicinesBox');
-      int addedQuantity = int.parse(_stockController.text.trim());
+      try {
+        final box = await Hive.openBox<Medicine>('medicinesBox');
+        int addedQuantity = int.parse(_stockController.text.trim());
 
-      final updatedMedicine = Medicine(
-        name: _nameController.text.trim(),
-        dosage: _dosageController.text.trim(),
-        expiryDate: _selectedDate!,
-        dailyIntakeTimes: _doseTimes
-            .take(_timesPerDay!)
-            .map((t) =>
-                "${t!.hour.toString().padLeft(2, '0')}:${t.minute.toString().padLeft(2, '0')}")
-            .toList(),
-        quantityLeft: widget.medicine.quantityLeft + addedQuantity,
-        totalQuantity: widget.medicine.totalQuantity + addedQuantity,
-        refillThreshold: widget.medicine.refillThreshold,
-      );
+        final updatedMedicine = Medicine(
+          id: widget.medicine.id, // Use existing ID
+          name: _nameController.text.trim(),
+          dosage: _dosageController.text.trim(),
+          expiryDate: _selectedDate!,
+          dailyIntakeTimes: _doseTimes
+              .take(_timesPerDay!)
+              .map((t) =>
+                  "${t!.hour.toString().padLeft(2, '0')}:${t.minute.toString().padLeft(2, '0')}")
+              .toList(),
+          quantityLeft: widget.medicine.quantityLeft + addedQuantity,
+          totalQuantity: widget.medicine.totalQuantity + addedQuantity,
+          refillThreshold: widget.medicine.refillThreshold,
+        );
+        print("Updated Medicine: $updatedMedicine");
+        // 1️⃣ Update locally in Hive
+        await box.put(widget.medicineKey, updatedMedicine);
 
-      box.put(widget.medicineKey, updatedMedicine);
+        // 2️⃣ Update in Supabase
 
-// After saving updatedMedicine:
-      // for (int i = 0; i < 4; i++) {
-      //   await flutterLocalNotificationsPlugin
-      //       .cancel(widget.medicineKey.hashCode + i);
-      // }
-
-      for (int i = 0; i < _timesPerDay!; i++) {
-        final time = _doseTimes[i]!;
-        DateTime scheduledDateTime = DateTime(
-          DateTime.now().year,
-          DateTime.now().month,
-          DateTime.now().day,
-          time.hour,
-          time.minute,
+        await Supabase.instance.client.from('medicine').update({
+          'name': updatedMedicine.name,
+          'dosage': updatedMedicine.dosage,
+          'expiry_date': updatedMedicine.expiryDate.toIso8601String(),
+          'daily_intake_times': updatedMedicine.dailyIntakeTimes,
+          'quantity_left': updatedMedicine.quantityLeft,
+          'total_quantity': updatedMedicine.totalQuantity,
+          'refill_threshold': updatedMedicine.refillThreshold,
+        }).eq(
+            'id', widget.medicineKey); // assuming medicineKey is Supabase's id
+        setState(() {
+          _isediting = false;
+        });
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text(
+              'Medicine Updated',
+              style: TextStyle(color: Colors.black),
+            ),
+            duration: Duration(seconds: 1),
+            behavior: SnackBarBehavior.floating,
+            backgroundColor: Color.fromARGB(255, 198, 252, 200),
+            margin: EdgeInsets.symmetric(vertical: 16.0, horizontal: 16.0),
+          ),
         );
 
-        // If time is in the past today, schedule for tomorrow
-        if (scheduledDateTime.isBefore(DateTime.now())) {
-          scheduledDateTime = scheduledDateTime.add(const Duration(days: 1));
-        }
-        // await scheduleMedicineNotification(
-        //   id: widget.medicineKey.hashCode + i, // unique id for each dose
-        //   title: 'Time to take ${_nameController.text.trim()}',
-        //   body: 'Dosage: ${_dosageController.text.trim()}',
-        //   dateTime: scheduledDateTime,
-        // );
+        Navigator.pop(context);
+      } catch (e) {
+        setState(() {
+          _isediting = false;
+        });
+        AppSnackbar.show(context,
+          message: "Failed to Update", success: false);
       }
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text(
-            'Medicine Updated',
-            style: TextStyle(color: Colors.black),
-          ),
-          behavior: SnackBarBehavior.floating,
-          backgroundColor: Color.fromARGB(255, 198, 252, 200),
-          margin: EdgeInsets.symmetric(vertical: 16.0, horizontal: 16.0),
-        ),
-      );
-
-      Navigator.pop(context);
     } else {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
@@ -332,15 +338,18 @@ class _EditMedicinePageState extends State<EditMedicinePage> {
                       borderRadius: BorderRadius.circular(12),
                     ),
                   ),
-                  child: const Text(
-                    "Save Changes",
-                    style: TextStyle(
-                      fontSize: 18,
-                      fontWeight: FontWeight.bold,
-                      color: Colors.white,
-                      letterSpacing: 1.1,
-                    ),
-                  ),
+                  child: _isediting
+                      ? const CircularProgressIndicator(
+                          color: Colors.white, strokeWidth: 2)
+                      : const Text(
+                          "Save Changes",
+                          style: TextStyle(
+                            fontSize: 18,
+                            fontWeight: FontWeight.bold,
+                            color: Colors.white,
+                            letterSpacing: 1.1,
+                          ),
+                        ),
                 ),
               ),
             ],

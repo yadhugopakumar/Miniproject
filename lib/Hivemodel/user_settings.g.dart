@@ -18,6 +18,7 @@ class UserSettingsAdapter extends TypeAdapter<UserSettings> {
     };
     return UserSettings(
       childId: fields[7] as String,
+      parentId: fields[8] as String,
       username: fields[0] as String,
       pin: fields[1] as String,
       securityQuestion: fields[5] as String,
@@ -31,7 +32,7 @@ class UserSettingsAdapter extends TypeAdapter<UserSettings> {
   @override
   void write(BinaryWriter writer, UserSettings obj) {
     writer
-      ..writeByte(8)
+      ..writeByte(9)
       ..writeByte(0)
       ..write(obj.username)
       ..writeByte(1)
@@ -47,7 +48,9 @@ class UserSettingsAdapter extends TypeAdapter<UserSettings> {
       ..writeByte(6)
       ..write(obj.securityAnswer)
       ..writeByte(7)
-      ..write(obj.childId);
+      ..write(obj.childId)
+      ..writeByte(8)
+      ..write(obj.parentId);
   }
 
   @override

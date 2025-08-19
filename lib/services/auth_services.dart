@@ -13,33 +13,33 @@ class AuthService {
     return user != null && user.pin == pin;
   }
 
-void register(
-  String childId,
-  String name,
-  String pin,
-  String sound,
-  String selectedQuestion,
-  String answer,
-  String parentPhone,
-  String parentEmail,
-) {
-  _hive.saveUserSettings(UserSettings(
-    childId: childId,
-    username: name,
-    pin: pin,
-    alarmSound: sound,
-    securityQuestion: selectedQuestion,
-    securityAnswer: answer,
-    phone: parentPhone,
-    parentEmail: parentEmail,
-  ));
-}
+  void register(
+    String childId,
+    String parent_id,
+    String name,
+    String pin,
+    String sound,
+    String selectedQuestion,
+    String answer,
+    String parentPhone,
+    String parentEmail,
+  ) {
+    _hive.saveUserSettings(UserSettings(
+      parentId: parent_id,
+      childId: childId,
+      username: name,
+      pin: pin,
+      alarmSound: sound,
+      securityQuestion: selectedQuestion,
+      securityAnswer: answer,
+      phone: parentPhone,
+      parentEmail: parentEmail,
+    ));
+  }
 
-void logout() {
-  final session = Hive.box('session');
-  session.put('loggedIn', false);
-  session.delete('email');
-}
-
-
+  void logout() {
+    final session = Hive.box('session');
+    session.put('loggedIn', false);
+    session.delete('email');
+  }
 }

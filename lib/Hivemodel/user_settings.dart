@@ -9,12 +9,12 @@ class UserSettings extends HiveObject {
 
   @HiveField(1)
   String pin;
-  
+
   @HiveField(2)
-  String ? phone;
+  String? phone;
 
   @HiveField(3)
-  String ? parentEmail;
+  String? parentEmail;
 
   @HiveField(4)
   String alarmSound;
@@ -27,15 +27,18 @@ class UserSettings extends HiveObject {
 
   @HiveField(7)
   String childId;
-  
+  @HiveField(8)
+  String parentId;
+
   UserSettings({
     required this.childId,
+    required this.parentId,
     required this.username,
     required this.pin,
     required this.securityQuestion,
     required this.securityAnswer,
-     this.phone,
-     this.parentEmail,
+    this.phone,
+    this.parentEmail,
     String? alarmSound,
   }) : alarmSound = alarmSound ?? 'default_alarm.mp3';
 }

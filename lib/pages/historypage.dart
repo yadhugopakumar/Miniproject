@@ -25,11 +25,15 @@ class _HistoryPageState extends State<HistoryPage> {
 
     final now = DateTime.now();
     final todayKey = "${now.year}-${now.month}-${now.day}";
+    final currentTime =
+        "${now.hour.toString().padLeft(2, '0')}:${now.minute.toString().padLeft(2, '0')}";
 
     for (var med in medicines.values) {
       for (var time in med.dailyIntakeTimes) {
         final doseKey = "${med.name}@$time@$todayKey";
-        if (!history.containsKey(doseKey)) {
+
+        // ✅ Only mark as missed if the dose time has already passed
+        if (!history.containsKey(doseKey) && time.compareTo(currentTime) < 0) {
           history.put(
             doseKey,
             HistoryEntry(
@@ -122,10 +126,15 @@ class _HistoryPageState extends State<HistoryPage> {
                           child: Column(
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
-                              Text(date,
+                              Padding(
+                                padding: const EdgeInsets.all(3.0),
+                                child: Text(
+                                  "Date: " + date,
                                   style: const TextStyle(
                                       fontWeight: FontWeight.bold,
-                                      fontSize: 16)),
+                                      fontSize: 16),
+                                ),
+                              ),
                               const Divider(),
                               ...meds.map((entry) {
                                 // Split medicineName into name and time if needed
@@ -165,6 +174,9 @@ class _HistoryPageState extends State<HistoryPage> {
               },
             ),
           ),
+          SizedBox(
+            height: 50,
+          )
         ],
       ),
     );

@@ -137,6 +137,7 @@ class _LoginForgotPinPageState extends State<LoginForgotPinPage> {
         // Step 3: Save to Hive
         final userBox = Hive.box<UserSettings>('settingsBox');
         final updatedUser = UserSettings(
+          parentId: updatedUserResponse['parent_id'] ?? '',
           childId: updatedUserResponse['child_id'] ?? '',
           username: updatedUserResponse['username'] ?? '',
           pin: updatedUserResponse['pin'] ?? '',

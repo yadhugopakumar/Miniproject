@@ -13,6 +13,8 @@ class Calendarpage extends StatefulWidget {
 }
 
 class _CalendarpageState extends State<Calendarpage> {
+  CalendarFormat _calendarFormat = CalendarFormat.month;
+
   DateTime _focusedDay = DateTime.now();
   DateTime? _selectedDay;
   Set<DateTime> expiryDates = {};
@@ -29,8 +31,8 @@ class _CalendarpageState extends State<Calendarpage> {
         : null;
     if (medicineBox != null) {
       expiryDates = medicineBox.values
-          .map((med) =>
-              DateTime(med.expiryDate.year, med.expiryDate.month, med.expiryDate.day))
+          .map((med) => DateTime(
+              med.expiryDate.year, med.expiryDate.month, med.expiryDate.day))
           .toSet();
     }
   }
@@ -63,16 +65,17 @@ class _CalendarpageState extends State<Calendarpage> {
       builder: (context, Box<Medicine> medicineBox, _) {
         // Keep expiryDates updated live
         expiryDates = medicineBox.values
-            .map((med) => DateTime(med.expiryDate.year, med.expiryDate.month, med.expiryDate.day))
+            .map((med) => DateTime(
+                med.expiryDate.year, med.expiryDate.month, med.expiryDate.day))
             .toSet();
-
 
         return Scaffold(
           appBar: AppBar(
             iconTheme: const IconThemeData(color: Colors.white),
             title: const Text(
               'Calendar View',
-              style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
+              style:
+                  TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
             ),
             backgroundColor: Colors.green[700],
             centerTitle: true,
@@ -82,20 +85,143 @@ class _CalendarpageState extends State<Calendarpage> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
+                Padding(
+                  padding: const EdgeInsets.all(1.0),
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.end,
+                    mainAxisSize: MainAxisSize.max,
+                    children: [
+                      ElevatedButton(
+                        onPressed: () {
+                          // Implement export functionality here
+                          // You can use a package like 'csv' to create a CSV file
+                          // and then save it or share it.
+                        },
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor:
+                              const Color.fromARGB(255, 58, 104, 79),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                          padding: const EdgeInsets.symmetric(vertical: 14),
+                        ),
+                        child: const Padding(
+                          padding: EdgeInsets.symmetric(
+                              vertical: 3.0, horizontal: 20),
+                          child: Row(
+                            children: <Widget>[
+                              Icon(Icons.file_download, color: Colors.white),
+                              SizedBox(width: 10),
+                              Text("Export this month History"),
+                            ],
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
                 TableCalendar(
                   firstDay: DateTime.utc(2020),
                   lastDay: DateTime.utc(2030),
                   focusedDay: _focusedDay,
                   selectedDayPredicate: (day) => isSameDay(_selectedDay, day),
+                  calendarFormat: _calendarFormat,
+                  onFormatChanged: (format) {
+                    setState(() {
+                      _calendarFormat = format;
+                    });
+                  },
                   onDaySelected: (selectedDay, focusedDay) {
                     setState(() {
                       _selectedDay = selectedDay;
                       _focusedDay = focusedDay;
                     });
+
+                    // Check if it's an expiry date
+                    final selectedDate = DateTime(
+                        selectedDay.year, selectedDay.month, selectedDay.day);
+
+                    if (expiryDates.contains(selectedDate)) {
+                      final medicineBox = Hive.box<Medicine>('medicinesBox');
+                      final expiringMeds = medicineBox.values
+                          .where((med) =>
+                              med.expiryDate.year == selectedDate.year &&
+                              med.expiryDate.month == selectedDate.month &&
+                              med.expiryDate.day == selectedDate.day)
+                          .toList();
+
+                      // Show a dialog with the details
+                      if (expiringMeds.isNotEmpty) {
+                        showDialog(
+                          context: context,
+                          builder: (_) => AlertDialog(
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(12),
+                            ),
+                            backgroundColor:
+                                const Color.fromARGB(255, 233, 251, 255),
+                            title: Text(
+                                "Medicines Expiring on - (${selectedDate.toLocal().toString().split(' ')[0]} )",
+                                style: const TextStyle(
+                                    fontWeight: FontWeight.bold,
+                                    color: Color.fromARGB(255, 66, 4, 0))),
+                            content: Column(
+                              mainAxisSize: MainAxisSize.min,
+                              children: expiringMeds.map(
+                                (med) {
+                                  return Container(
+                                    padding:
+                                        const EdgeInsets.symmetric(vertical: 8),
+                                    decoration: const BoxDecoration(
+                                      border: Border(
+                                        bottom: BorderSide(
+                                            color: Colors.grey, width: 0.8),
+                                      ),
+                                    ),
+                                    child: ListTile(
+                                      leading: const Icon(Icons.warning,
+                                          color: Colors.red),
+                                      title: Text(med.name,
+                                          style: const TextStyle(
+                                              fontWeight: FontWeight.bold)),
+                                      subtitle: Column(
+                                        mainAxisAlignment:
+                                            MainAxisAlignment.spaceBetween,
+                                        crossAxisAlignment:
+                                            CrossAxisAlignment.start,
+                                        children: [
+                                          Text(
+                                            "Dosage: ${med.dosage} pill(s)",
+                                            style: const TextStyle(
+                                                fontWeight: FontWeight.bold),
+                                          ),
+                                          Text(
+                                            "Remaining: ${med.quantityLeft} only",
+                                            style: const TextStyle(
+                                                fontWeight: FontWeight.bold),
+                                          ),
+                                        ],
+                                      ),
+                                    ),
+                                  );
+                                },
+                              ).toList(),
+                            ),
+                            actions: [
+                              TextButton(
+                                onPressed: () => Navigator.pop(context),
+                                child: const Text("Close"),
+                              ),
+                            ],
+                          ),
+                        );
+                      }
+                    }
                   },
                   calendarBuilders: CalendarBuilders(
                     defaultBuilder: (context, day, focusedDay) {
-                      final isExpiredDate = expiryDates.contains(DateTime(day.year, day.month, day.day));
+                      final isExpiredDate = expiryDates
+                          .contains(DateTime(day.year, day.month, day.day));
                       if (isExpiredDate) {
                         return Container(
                           alignment: Alignment.center,
@@ -105,7 +231,8 @@ class _CalendarpageState extends State<Calendarpage> {
                           ),
                           child: Text(
                             '${day.day}',
-                            style: const TextStyle(color: Colors.red, fontWeight: FontWeight.bold),
+                            style: const TextStyle(
+                                color: Colors.red, fontWeight: FontWeight.bold),
                           ),
                         );
                       }
@@ -126,11 +253,13 @@ class _CalendarpageState extends State<Calendarpage> {
                 const SizedBox(height: 20),
                 Text(
                   "Medicines on ${(_selectedDay ?? _focusedDay).toLocal().toString().split(' ')[0]}",
-                  style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+                  style: const TextStyle(
+                      fontSize: 16, fontWeight: FontWeight.bold),
                 ),
                 const SizedBox(height: 10),
                 ValueListenableBuilder(
-                  valueListenable: Hive.box<HistoryEntry>('historyBox').listenable(),
+                  valueListenable:
+                      Hive.box<HistoryEntry>('historyBox').listenable(),
                   builder: (context, Box<HistoryEntry> historyBox, _) {
                     final meds = _selectedDay != null
                         ? _getMedicinesForDay(_selectedDay!)
@@ -146,13 +275,17 @@ class _CalendarpageState extends State<Calendarpage> {
                       children: meds.map((med) {
                         return Card(
                           child: ListTile(
-                            leading: const Icon(Icons.medical_services, color: Colors.teal),
+                            leading: const Icon(Icons.medical_services,
+                                color: Colors.teal),
                             title: Text(
                               med['name']!,
-                              style: const TextStyle(fontWeight: FontWeight.bold, color: Colors.black),
+                              style: const TextStyle(
+                                  fontWeight: FontWeight.bold,
+                                  color: Colors.black),
                             ),
                             trailing: Container(
-                              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                              padding: const EdgeInsets.symmetric(
+                                  horizontal: 12, vertical: 6),
                               decoration: BoxDecoration(
                                 color: med['status'] == 'taken'
                                     ? const Color.fromARGB(255, 121, 255, 125)
@@ -161,7 +294,8 @@ class _CalendarpageState extends State<Calendarpage> {
                               ),
                               child: Text(
                                 med['status']!,
-                                style: const TextStyle(fontWeight: FontWeight.bold),
+                                style: const TextStyle(
+                                    fontWeight: FontWeight.bold),
                               ),
                             ),
                           ),

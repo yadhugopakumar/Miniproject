@@ -3,8 +3,10 @@ import 'package:hive_flutter/adapters.dart';
 import 'package:medremind/constants/constants.dart';
 import 'package:medremind/pages/auth/loginpage.dart';
 import 'package:medremind/pages/auth/pinlogin.dart';
+// import 'package:path_provider/path_provider.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
+import 'Hivemodel/health_report.dart';
 import 'Hivemodel/history_entry.dart';
 import 'Hivemodel/medicine.dart';
 import 'Hivemodel/user_settings.dart';
@@ -12,10 +14,14 @@ import 'Hivemodel/user_settings.dart';
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
   await Hive.initFlutter();
-
+  // final dir = await getApplicationDocumentsDirectory();
+  // print("Hive files location: ${dir.path}");
   Hive.registerAdapter(UserSettingsAdapter());
   Hive.registerAdapter(MedicineAdapter());
   Hive.registerAdapter(HistoryEntryAdapter());
+  Hive.registerAdapter(HealthReportAdapter());
+
+  await Hive.openBox<HealthReport>('healthReportsBox');
 
   await Hive.openBox<UserSettings>('settingsBox');
   await Hive.openBox<Medicine>('medicinesBox');

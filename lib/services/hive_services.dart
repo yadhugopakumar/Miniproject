@@ -62,6 +62,7 @@ bool validateLogin(String username, String pin) {
   final user = box.values.firstWhere(
     (u) => u.username == username && u.pin == pin,
     orElse: () => UserSettings(
+      parentId: '',
       childId: '',
       username: '',
       pin: '',
