@@ -293,6 +293,7 @@ class _ProfilepageState extends State<Profilepage> {
               const SizedBox(height: 16),
               TextField(
                 controller: nameController,
+                textCapitalization: TextCapitalization.sentences,
                 decoration: InputDecoration(
                   labelText: "New Name",
                   border: OutlineInputBorder(
@@ -346,8 +347,13 @@ class _ProfilepageState extends State<Profilepage> {
   }
 
   Future<void> _updateName(String newName) async {
-    if (newName.trim().isEmpty) {
+    if (newName.trim().isEmpty || newName.length < 3) {
       AppSnackbar.show(context, message: "Enter a valid name", success: false);
+      return;
+    }
+    if (newName.trim() == user!.username) {
+      AppSnackbar.show(context,
+          message: "Name is same as previous", success: false);
       return;
     }
 

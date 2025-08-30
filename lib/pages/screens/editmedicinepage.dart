@@ -91,7 +91,6 @@ class _EditMedicinePageState extends State<EditMedicinePage> {
     }
   }
 
-
   void _saveChanges() async {
     setState(() {
       _isediting = true;
@@ -108,7 +107,16 @@ class _EditMedicinePageState extends State<EditMedicinePage> {
         allTimesSelected) {
       try {
         final box = await Hive.openBox<Medicine>('medicinesBox');
-        int addedQuantity = int.parse(_stockController.text.trim());
+        int addedQuantity = int.tryParse(_stockController.text.trim()) ?? 0;
+
+        int oldQuantityLeft = widget.medicine.quantityLeft;
+        int oldTotalQuantity = widget.medicine.totalQuantity;
+
+        int newQuantityLeft = oldQuantityLeft + addedQuantity;
+        if (newQuantityLeft < 0) newQuantityLeft = 0; // Ensure not negative
+
+        int newTotalQuantity = oldTotalQuantity + addedQuantity;
+        if (newTotalQuantity < 0) newTotalQuantity = 0;
 
         final updatedMedicine = Medicine(
           id: widget.medicine.id, // Use existing ID
@@ -120,8 +128,8 @@ class _EditMedicinePageState extends State<EditMedicinePage> {
               .map((t) =>
                   "${t!.hour.toString().padLeft(2, '0')}:${t.minute.toString().padLeft(2, '0')}")
               .toList(),
-          quantityLeft: widget.medicine.quantityLeft + addedQuantity,
-          totalQuantity: widget.medicine.totalQuantity + addedQuantity,
+          quantityLeft: newQuantityLeft,
+          totalQuantity: newTotalQuantity,
           refillThreshold: widget.medicine.refillThreshold,
         );
         print("Updated Medicine: $updatedMedicine");
@@ -161,8 +169,7 @@ class _EditMedicinePageState extends State<EditMedicinePage> {
         setState(() {
           _isediting = false;
         });
-        AppSnackbar.show(context,
-          message: "Failed to Update", success: false);
+        AppSnackbar.show(context, message: "Failed to Update", success: false);
       }
     } else {
       ScaffoldMessenger.of(context).showSnackBar(
