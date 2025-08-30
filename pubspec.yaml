@@ -44,6 +44,9 @@ dependencies:
   supabase_flutter: ^2.8.4
   fl_chart: ^0.63.0
   another_flushbar: ^1.12.30
+  speech_to_text: ^6.6.0
+  flutter_tts: ^3.6.3
+  permission_handler: ^11.0.1
 dev_dependencies:
   flutter_test:
     sdk: flutter

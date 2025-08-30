@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import 'package:hive/hive.dart';
 import 'package:hive_flutter/adapters.dart';
 import 'package:medremind/pages/auth/loginpage.dart';
 import 'package:medremind/pages/chatpage.dart';
@@ -8,6 +7,10 @@ import 'package:medremind/pages/innerpages/profilepage.dart';
 import 'package:medremind/pages/innerpages/reportpage.dart';
 import 'package:medremind/pages/refillpage.dart';
 import 'package:medremind/pages/historypage.dart';
+import 'package:medremind/utils/customsnackbar.dart';
+
+import '../chatmanager/chat_manager.dart';
+import '../chatmanager/voice_chat_overlay.dart';
 
 import 'Hivemodel/history_entry.dart';
 import 'Hivemodel/medicine.dart';
@@ -21,15 +24,414 @@ class Bottomnavbar extends StatefulWidget {
   State<Bottomnavbar> createState() => _BottomnavbarState();
 }
 
-class _BottomnavbarState extends State<Bottomnavbar> {
+class _BottomnavbarState extends State<Bottomnavbar>
+    with TickerProviderStateMixin {
   late int _selectedIndex;
 
 // Use childId for further queries, navigation, etc.
   final session = Hive.box('session');
+//for chat
+  final VoiceChatManager _voiceManager = VoiceChatManager();
+  bool _showVoiceOverlay = false;
+  //for chatpage
+
+  late AnimationController _bottomBarController;
+  late Animation<Offset> _bottomBarAnimation;
+
   @override
   void initState() {
     super.initState();
     _selectedIndex = widget.initialIndex;
+
+    // Initialize animation controller
+    _bottomBarController = AnimationController(
+      duration: Duration(milliseconds: 300),
+      vsync: this, // Add TickerProviderStateMixin to your class
+    );
+
+    _bottomBarAnimation = Tween<Offset>(
+      begin: Offset.zero,
+      end: Offset(0.0, 2.5), // Move down by 1.5x its height
+    ).animate(CurvedAnimation(
+      parent: _bottomBarController,
+      curve: Curves.easeInOut,
+    ));
+
+    _voiceManager.initialize();
+    _voiceManager.onStateChanged = () {
+      setState(() {
+        bool shouldShowOverlay =
+            _voiceManager.isListening || _voiceManager.isProcessing;
+
+        if (_showVoiceOverlay != shouldShowOverlay) {
+          _showVoiceOverlay = shouldShowOverlay;
+
+          if (_showVoiceOverlay) {
+            _bottomBarController.forward();
+          } else {
+            _bottomBarController.reverse();
+          }
+        }
+      });
+    };
+  }
+
+  void _handleMicPressed() {
+    print("Mic button pressed"); // Debug log
+
+    // Reset the manager state first
+    _voiceManager.reset();
+
+    // Clear any existing callbacks and set new ones
+    _voiceManager.onStateChanged = () {
+      if (mounted) {
+        print(
+            "State changed - listening: ${_voiceManager.isListening}, processing: ${_voiceManager.isProcessing}"); // Debug log
+        setState(() {
+          bool shouldShowOverlay =
+              _voiceManager.isListening || _voiceManager.isProcessing;
+
+          if (_showVoiceOverlay != shouldShowOverlay) {
+            _showVoiceOverlay = shouldShowOverlay;
+            print(
+                "Overlay visibility changed to: $_showVoiceOverlay"); // Debug log
+
+            if (_showVoiceOverlay) {
+              _bottomBarController.forward();
+            } else {
+              _bottomBarController.reverse();
+            }
+          }
+        });
+      }
+    };
+
+    // Set error and answer callbacks
+    _voiceManager.onShowError = (error) {
+      if (mounted) {
+        AppSnackbar.show(context, message: error, success: false);
+      }
+    };
+    // void _showAnswer(String text) {
+    //   showDialog(
+    //     context: context,
+    //     builder: (context) => AlertDialog(
+    //       title: const Text('MedRemind Response'),
+    //       content: Text(text),
+    //       actions: [
+    //         TextButton(
+    //           onPressed: () => Navigator.pop(context),
+    //           child: const Text('OK'),
+    //         ),
+    //       ],
+    //     ),
+    //   );
+    // }
+// void _showAnswer(String text) {
+//   showDialog(
+//     context: context,
+//     barrierDismissible: true,
+//     builder: (context) => Dialog(
+//       backgroundColor: Colors.transparent,
+//       child: Container(
+//         margin: EdgeInsets.symmetric(horizontal: 20, vertical: 50),
+//         child: Material(
+//           color: Colors.transparent,
+//           child: Container(
+//             decoration: BoxDecoration(
+//               gradient: LinearGradient(
+//                 begin: Alignment.topLeft,
+//                 end: Alignment.bottomRight,
+//                 colors: [
+//                   Color(0xFF4CAF50).withOpacity(0.9),
+//                   Color(0xFF81C784).withOpacity(0.9),
+//                 ],
+//               ),
+//               borderRadius: BorderRadius.circular(20),
+//               boxShadow: [
+//                 BoxShadow(
+//                   color: Colors.black.withOpacity(0.3),
+//                   blurRadius: 20,
+//                   spreadRadius: 5,
+//                   offset: Offset(0, 10),
+//                 ),
+//               ],
+//             ),
+//             child: Stack(
+//               children: [
+//                 // Chat bubble tail
+//                 Positioned(
+//                   left: 30,
+//                   top: -10,
+//                   child: Container(
+//                     width: 20,
+//                     height: 20,
+//                     decoration: BoxDecoration(
+//                       color: Color(0xFF4CAF50),
+//                       borderRadius: BorderRadius.circular(3),
+//                     ),
+//                     transform: Matrix4.rotationZ(0.785398), // 45 degrees
+//                   ),
+//                 ),
+//                 Padding(
+//                   padding: EdgeInsets.all(24),
+//                   child: Column(
+//                     mainAxisSize: MainAxisSize.min,
+//                     crossAxisAlignment: CrossAxisAlignment.start,
+//                     children: [
+//                       // AI Avatar and Header
+//                       Row(
+//                         children: [
+//                           Container(
+//                             width: 40,
+//                             height: 40,
+//                             decoration: BoxDecoration(
+//                               color: Colors.white,
+//                               borderRadius: BorderRadius.circular(20),
+//                             ),
+//                             child: Icon(
+//                               Icons.android,
+//                               color: Colors.green[700],
+//                               size: 24,
+//                             ),
+//                           ),
+//                           SizedBox(width: 12),
+//                           Text(
+//                             'MedRemind AI',
+//                             style: TextStyle(
+//                               color: Colors.white,
+//                               fontSize: 18,
+//                               fontWeight: FontWeight.bold,
+//                             ),
+//                           ),
+//                         ],
+//                       ),
+//                       SizedBox(height: 16),
+                      
+//                       // Response text with typing animation
+//                       AnimatedContainer(
+//                         duration: Duration(milliseconds: 500),
+//                         child: Text(
+//                           text,
+//                           style: TextStyle(
+//                             color: Colors.white,
+//                             fontSize: 16,
+//                             height: 1.4,
+//                           ),
+//                         ),
+//                       ),
+                      
+//                       SizedBox(height: 20),
+                      
+//                       // Action buttons
+//                       Row(
+//                         mainAxisAlignment: MainAxisAlignment.end,
+//                         children: [
+//                           TextButton(
+//                             onPressed: () {
+//                               Navigator.pop(context);
+//                               _handleMicPressed(); // Ask another question
+//                             },
+//                             style: TextButton.styleFrom(
+//                               backgroundColor: Colors.white.withOpacity(0.2),
+//                               shape: RoundedRectangleBorder(
+//                                 borderRadius: BorderRadius.circular(20),
+//                               ),
+//                             ),
+//                             child: Text(
+//                               '🎤 Ask More',
+//                               style: TextStyle(color: Colors.white),
+//                             ),
+//                           ),
+//                           SizedBox(width: 8),
+//                           TextButton(
+//                             onPressed: () => Navigator.pop(context),
+//                             style: TextButton.styleFrom(
+//                               backgroundColor: Colors.white,
+//                               shape: RoundedRectangleBorder(
+//                                 borderRadius: BorderRadius.circular(20),
+//                               ),
+//                             ),
+//                             child: Text(
+//                               'Got it!',
+//                               style: TextStyle(color: Colors.green[700]),
+//                             ),
+//                           ),
+//                         ],
+//                       ),
+//                     ],
+//                   ),
+//                 ),
+//               ],
+//             ),
+//           ),
+//         ),
+//       ),
+//     ),
+//   );
+// }
+void _showAnswer(String text) {
+  showDialog(
+    context: context,
+    barrierDismissible: true,
+    builder: (context) => Dialog(
+      backgroundColor: Colors.transparent,
+      child: Container(
+        margin: EdgeInsets.all(4),
+        decoration: BoxDecoration(
+          gradient: LinearGradient(
+            begin: Alignment.topCenter,
+            end: Alignment.bottomCenter,
+            colors: [
+              Colors.white,
+              Colors.green[50]!,
+            ],
+          ),
+          borderRadius: BorderRadius.circular(25),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withOpacity(0.1),
+              blurRadius: 25,
+              spreadRadius: 5,
+            ),
+          ],
+        ),
+        child: ClipRRect(
+          borderRadius: BorderRadius.circular(25),
+          child: Padding(
+            padding: EdgeInsets.all(24),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                // Animated AI icon
+                TweenAnimationBuilder(
+                  tween: Tween(begin: 0.0, end: 1.0),
+                  duration: Duration(milliseconds: 800),
+                  builder: (context, double value, child) {
+                    return Transform.scale(
+                      scale: value,
+                      child: Container(
+                        width: 60,
+                        height: 60,
+                        decoration: BoxDecoration(
+                          gradient: LinearGradient(
+                            colors: [Colors.blue[400]!, Colors.green[400]!],
+                          ),
+                          shape: BoxShape.circle,
+                          boxShadow: [
+                            BoxShadow(
+                              color: Colors.blue.withOpacity(0.3),
+                              blurRadius: 15,
+                              spreadRadius: 2,
+                            ),
+                          ],
+                        ),
+                        child: Icon(
+                          Icons.assistant,
+                          color: Colors.white,
+                          size: 30,
+                        ),
+                      ),
+                    );
+                  },
+                ),
+                
+                SizedBox(height: 16),
+                
+                Text(
+                  'MedRemind Assistant',
+                  style: TextStyle(
+                    fontSize: 20,
+                    fontWeight: FontWeight.w600,
+                    color: Colors.grey[700],
+                  ),
+                ),
+                
+                SizedBox(height: 20),
+                
+                // Response with subtle background
+                Container(
+                  width: double.infinity,
+                  padding: EdgeInsets.all(20),
+                  decoration: BoxDecoration(
+                    color: Colors.white,
+                    borderRadius: BorderRadius.circular(16),
+                    border: Border.all(
+                      color: Colors.blue[100]!,
+                      width: 1.5,
+                    ),
+                  ),
+                  child: Text(
+                    text,
+                    style: TextStyle(
+                      fontSize: 16,
+                      height: 1.6,
+                      color: Colors.grey[800],
+                    ),
+                    textAlign: TextAlign.left,
+                  ),
+                ),
+                
+                SizedBox(height: 24),
+                
+                // Single action button
+                SizedBox(
+                  width: double.infinity,
+                  child: ElevatedButton(
+                    onPressed: () => Navigator.pop(context),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: Colors.green[600],
+                      foregroundColor: Colors.white,
+                      elevation: 3,
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(16),
+                      ),
+                      padding: EdgeInsets.symmetric(vertical: 16),
+                    ),
+                    child: Text(
+                      'Got it! 👍',
+                      style: TextStyle(
+                        fontSize: 16,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    ),
+  );
+}
+
+    _voiceManager.onShowAnswer = (response) {
+      if (mounted) {
+        _showAnswer(response);
+      }
+    };
+
+    // Start listening
+    _voiceManager.startListening();
+  }
+
+  void _closeVoiceOverlay() {
+    print("Closing voice overlay"); // Debug log
+    _voiceManager.reset();
+    if (mounted) {
+      setState(() {
+        _showVoiceOverlay = false;
+      });
+      _bottomBarController.reverse();
+    }
+  }
+
+  @override
+  void dispose() {
+    _bottomBarController.dispose();
+    _voiceManager.dispose();
+    super.dispose();
   }
 
   final List<Widget> _pages = [
@@ -47,27 +449,36 @@ class _BottomnavbarState extends State<Bottomnavbar> {
       extendBody: true,
       floatingActionButtonLocation: FloatingActionButtonLocation.centerDocked,
       floatingActionButton: _selectedIndex != 1
-          ? Padding(
-              padding: const EdgeInsets.only(bottom: 9),
-              child: Material(
-                color: const Color.fromARGB(255, 93, 255, 101),
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(35),
-                ),
-                elevation: 20,
-                child: Container(
-                  height: 65.0,
-                  width: 65.0,
-                  child: FloatingActionButton(
-                    // backgroundColor: Color.fromARGB(255, 75, 44, 90),
-                    backgroundColor: const Color.fromARGB(255, 16, 59, 65),
+          ? AnimatedContainer(
+              duration: Duration(milliseconds: 300),
+              transform: Matrix4.translationValues(
+                  0,
+                  _showVoiceOverlay
+                      ? 200
+                      : 0, // Move FAB down when overlay is active
+                  0),
+              child: Padding(
+                padding: const EdgeInsets.only(bottom: 9),
+                child: Material(
+                  color: const Color.fromARGB(255, 93, 255, 101),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(35),
+                  ),
+                  elevation: 20,
+                  child: Container(
+                    height: 65.0,
+                    width: 65.0,
+                    child: FloatingActionButton(
+                      // backgroundColor: Color.fromARGB(255, 75, 44, 90),
+                      backgroundColor: const Color.fromARGB(255, 16, 59, 65),
 
-                    onPressed: () {},
-                    child: const Icon(
-                      Icons.mic_none_sharp,
-                      size: 33,
-                      color: Color.fromARGB(255, 174, 233, 156),
-                      // color: Color.fromARGB(255, 255, 216, 42),
+                      onPressed: _handleMicPressed,
+                      child: const Icon(
+                        Icons.mic_none_sharp,
+                        size: 33,
+                        color: Color.fromARGB(255, 174, 233, 156),
+                        // color: Color.fromARGB(255, 255, 216, 42),
+                      ),
                     ),
                   ),
                 ),
@@ -75,73 +486,93 @@ class _BottomnavbarState extends State<Bottomnavbar> {
             )
           : null,
       bottomNavigationBar: _selectedIndex != 1
-          ? Padding(
-              padding: const EdgeInsets.only(left: 10, right: 10, bottom: 15),
-              child: BottomAppBar(
-                color: Colors.transparent,
-                shape: const CircularNotchedRectangle(),
-                notchMargin: 6.0,
-                elevation: 0,
-                child: Container(
-                    decoration: BoxDecoration(
-                      color: Colors.green[900]!.withOpacity(0.85),
-                      // color: Colors.purple[900]!.withOpacity(0.8),
+          ? SlideTransition(
+              position: _bottomBarAnimation,
+              child: AbsorbPointer(
+                absorbing: _showVoiceOverlay,
+                child: Padding(
+                  padding:
+                      const EdgeInsets.only(left: 10, right: 10, bottom: 15),
+                  child: BottomAppBar(
+                    color: Colors.transparent,
+                    shape: const CircularNotchedRectangle(),
+                    notchMargin: 6.0,
+                    elevation: 0,
+                    child: Container(
+                        decoration: BoxDecoration(
+                          color: Colors.green[900]!.withOpacity(0.85),
+                          // color: Colors.purple[900]!.withOpacity(0.8),
 
-                      borderRadius: BorderRadius.circular(15),
-                      border: Border.all(
-                        color: Colors.green[900]!,
-                        width: 0.1,
-                      ),
-                    ),
-                    height: kToolbarHeight + 5,
-                    child: Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceAround,
-                      children: [
-                        _buildNavItem(
-                            icon: Icons.home_outlined, index: 0, label: "Home"),
-                        _buildNavItem(
-                          icon: Icons.message_outlined,
-                          index: 1,
-                          label: "Chat",
+                          borderRadius: BorderRadius.circular(15),
+                          border: Border.all(
+                            color: Colors.green[900]!,
+                            width: 0.1,
+                          ),
                         ),
-                        Stack(
-                          alignment: Alignment.topCenter,
-                          clipBehavior: Clip.none,
+                        height: kToolbarHeight + 5,
+                        child: Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceAround,
                           children: [
-                            Container(
-                              width: MediaQuery.of(context).size.width / 8,
-                              height: 50,
-                              color: Colors
-                                  .transparent, // optional background placeholder
+                            _buildNavItem(
+                                icon: Icons.home_outlined,
+                                index: 0,
+                                label: "Home"),
+                            _buildNavItem(
+                              icon: Icons.message_outlined,
+                              index: 1,
+                              label: "Chat",
                             ),
-                            Positioned(
-                              top:
-                                  -48, // half of height to make it overlap nicely
-                              child: Container(
-                                width: 75,
-                                height: 75,
-                                decoration: const BoxDecoration(
-                                  color: Colors.white,
-                                  shape: BoxShape.circle,
+                            Stack(
+                              alignment: Alignment.topCenter,
+                              clipBehavior: Clip.none,
+                              children: [
+                                Container(
+                                  width: MediaQuery.of(context).size.width / 8,
+                                  height: 50,
+                                  color: Colors
+                                      .transparent, // optional background placeholder
                                 ),
-                              ),
+                                Positioned(
+                                  top:
+                                      -48, // half of height to make it overlap nicely
+                                  child: Container(
+                                    width: 75,
+                                    height: 75,
+                                    decoration: const BoxDecoration(
+                                      color: Colors.white,
+                                      shape: BoxShape.circle,
+                                    ),
+                                  ),
+                                ),
+                              ],
                             ),
+                            _buildNavItem(
+                                icon: Icons.history_rounded,
+                                index: 2,
+                                label: "History"),
+                            _buildNavItem(
+                                icon: Icons.recycling_outlined,
+                                index: 3,
+                                label: "Refill"),
                           ],
-                        ),
-                        _buildNavItem(
-                            icon: Icons.history_rounded,
-                            index: 2,
-                            label: "History"),
-                        _buildNavItem(
-                            icon: Icons.recycling_outlined,
-                            index: 3,
-                            label: "Refill"),
-                      ],
-                    )),
+                        )),
+                  ),
+                ),
               ),
             )
           : null,
-      body: _pages[_selectedIndex],
+      body: Stack(
+        // Wrap body in Stack
+        children: [
+          _pages[_selectedIndex],
+
+          // Voice Chat Overlay
+          if (_showVoiceOverlay)
+            VoiceChatOverlay(
+              onClose: _closeVoiceOverlay,
+            ),
+        ],
+      ),
     );
   }
 
