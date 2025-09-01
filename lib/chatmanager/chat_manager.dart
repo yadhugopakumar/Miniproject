@@ -3,11 +3,15 @@ import 'package:flutter/material.dart';
 import 'package:hive/hive.dart';
 import 'package:speech_to_text/speech_to_text.dart' as stt;
 import 'package:flutter_tts/flutter_tts.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:words_numbers/words_numbers.dart';
 
 import '../Hivemodel/health_report.dart';
 import '../Hivemodel/history_entry.dart';
 import '../Hivemodel/medicine.dart';
 import '../Hivemodel/user_settings.dart';
+
+enum VoiceMode { normal, addMedicine }
 
 class VoiceChatManager {
   static final VoiceChatManager _instance = VoiceChatManager._internal();
@@ -23,6 +27,7 @@ class VoiceChatManager {
   VoidCallback? onStateChanged;
   Function(String)? onShowAnswer; // ADD THIS - was missing
   Function(String)? onShowError; // ADD THIS - was missing
+  Function(Map<String, dynamic>)? onAddMedicineCompleted;
 
   final stt.SpeechToText _speech = stt.SpeechToText();
   final FlutterTts _tts = FlutterTts();
@@ -31,6 +36,11 @@ class VoiceChatManager {
   bool get isProcessing => _isProcessing;
   String get currentTranscript => _currentTranscript;
   String get currentResponse => _currentResponse; // ADD THIS getter
+//for choosing the type of iput from user
+  VoiceMode _mode = VoiceMode.normal;
+  int _step = 0;
+  Map<String, dynamic> _answers = {};
+//for choosing the type of iput from user
 
   Future<void> initialize() async {
     try {
@@ -80,7 +90,7 @@ class VoiceChatManager {
     try {
       _speech.stop();
       _tts.stop(); // FIXED: was _flutterTts, should be _tts
-
+      _mode = VoiceMode.normal;
       // Reset all state
       _isListening = false;
       _isProcessing = false;
@@ -155,7 +165,13 @@ class VoiceChatManager {
     setProcessing(true);
 
     try {
-      String response = await _getAIResponse(text);
+      String response;
+
+      if (_mode == VoiceMode.addMedicine) {
+        response = await _handleAddMedicineStep(text);
+      } else {
+        response = await _getAIResponse(text); // existing Q&A
+      }
       setResponse(response); // ADD THIS LINE
       await _speak(response);
       onShowAnswer?.call(response); // ADD THIS LINE
@@ -167,6 +183,210 @@ class VoiceChatManager {
     }
   }
 
+//for add medicine mode
+
+  // Future<void> startAddMedicineFlow() async {
+  //   _mode = VoiceMode.addMedicine;
+  //   _step = 0;
+  //   _answers.clear();
+  //   await _speak("Let's add a new medicine. What is the medicine name?");
+  // }
+  DateTime _parseExpiryDate(String text) {
+    try {
+      // Split text into parts
+      final parts = text.trim().split(RegExp(r'\s+'));
+      if (parts.length < 3) return DateTime.now().add(Duration(days: 90));
+
+      // Convert day and year words to numbers
+      final day =
+          int.tryParse(WordsNumbers.convertTextNumberToString(parts[0])) ?? 1;
+      final month = _monthFromString(parts[1]);
+      final year =
+          int.tryParse(WordsNumbers.convertTextNumberToString(parts[2])) ??
+              DateTime.now().year;
+
+      return DateTime(year, month, day);
+    } catch (e) {
+      print("Error parsing expiry date: $e");
+      return DateTime.now().add(Duration(days: 90));
+    }
+  }
+
+  int _monthFromString(String month) {
+    switch (month.toLowerCase()) {
+      case 'january':
+        return 1;
+      case 'february':
+        return 2;
+      case 'march':
+        return 3;
+      case 'april':
+        return 4;
+      case 'may':
+        return 5;
+      case 'june':
+        return 6;
+      case 'july':
+        return 7;
+      case 'august':
+        return 8;
+      case 'september':
+        return 9;
+      case 'october':
+        return 10;
+      case 'november':
+        return 11;
+      case 'december':
+        return 12;
+      default:
+        // Try converting month as a number word
+        return int.tryParse(WordsNumbers.convertTextNumberToString(month)) ??
+            DateTime.now().month;
+    }
+  }
+
+  TimeOfDay _parseTimeOfDay(String text) {
+    try {
+      final parts =
+          text.trim().split(RegExp(r'[:\s]+')); // Split by space or colon
+      if (parts.isEmpty) return TimeOfDay.now();
+
+      // Convert first part to hour
+      int hour =
+          int.tryParse(WordsNumbers.convertTextNumberToString(parts[0])) ?? 0;
+
+      // Convert second part to minute if exists
+      int minute = 0;
+      if (parts.length > 1) {
+        minute =
+            int.tryParse(WordsNumbers.convertTextNumberToString(parts[1])) ?? 0;
+      }
+
+      // Check for AM/PM in the text
+      if (text.toLowerCase().contains('pm') && hour < 12) hour += 12;
+      if (text.toLowerCase().contains('am') && hour == 12) hour = 0;
+
+      return TimeOfDay(hour: hour, minute: minute);
+    } catch (e) {
+      print("Error parsing time: $e");
+      return TimeOfDay.now();
+    }
+  }
+
+  Future<String> _handleAddMedicineStep(String text) async {
+    switch (_step) {
+      case 0:
+        _answers['name'] = text;
+        _step++;
+        return "What is the dosage?";
+      case 1:
+        _answers['dosage'] =
+            int.tryParse(WordsNumbers.convertTextNumberToString(text)) ?? 0;
+        _step++;
+        return "How many tablets do you have in total?";
+      case 2:
+        // Convert spoken quantity like "two" -> 2
+        _answers['quantity'] =
+            int.tryParse(WordsNumbers.convertTextNumberToString(text)) ?? 0;
+        _step++;
+        return "When should I remind you to refill? Say a number like 5.";
+
+      case 3:
+        _answers['threshold'] =
+            int.tryParse(WordsNumbers.convertTextNumberToString(text)) ?? 0;
+        _step++;
+        return "What is the expiry date? Please say in format day month year.";
+      case 4:
+        // Convert spoken date like "five September two zero two five" -> DateTime
+        _answers['expiryDate'] = _parseExpiryDate(text);
+        _step++;
+        return "How many times per day should you take this medicine?";
+
+      case 5:
+        _answers['timesPerDay'] =
+            int.tryParse(WordsNumbers.convertTextNumberToString(text)) ?? 1;
+        _answers['doseTimes'] = [];
+        _step++;
+        return "Please say the first intake time, for example 8 AM.";
+      case 6:
+        // Parse spoken time like "eight thirty AM" or "8 30"
+        final time = _parseTimeOfDay(text);
+        _answers['doseTimes'].add(time);
+
+        if (_answers['doseTimes'].length < _answers['timesPerDay']) {
+          return "Please say the next intake time.";
+        } else {
+          _step++;
+          return "Do you want me to save this medicine?";
+        }
+
+      case 7:
+        if (text.toLowerCase().contains("yes")) {
+          try {
+            // 1️⃣ Get current child ID from session
+            final session = Hive.box('session');
+            final currentChildId = session.get('childId', defaultValue: '');
+
+            final medicineBox = Hive.box<Medicine>('medicinesBox');
+
+            // 2️⃣ Insert into Supabase first
+            final supabase = Supabase.instance.client;
+            final response = await supabase
+                .from('medicine')
+                .insert({
+                  'child_id': currentChildId,
+                  'name': _answers['name'] ?? '',
+                  'dosage': _answers['dosage'] ?? '',
+                  'expiry_date': (_answers['expiryDate'] ??
+                          DateTime.now().add(Duration(days: 90)))
+                      .toIso8601String(),
+                  'daily_intake_times':
+                      (_answers['doseTimes'] as List<TimeOfDay>)
+                          .map((t) => "${t.hour}:${t.minute}")
+                          .toList(),
+                  'total_quantity': _answers['quantity'] ?? 0,
+                  'quantity_left': _answers['quantity'] ?? 0,
+                  'refill_threshold': _answers['threshold'] ?? 0,
+                  'created_at': DateTime.now().toIso8601String(),
+                })
+                .select()
+                .single();
+
+            // 3️⃣ Build Medicine object using Supabase ID
+            final medicine = Medicine(
+              id: response['id'], // Supabase auto-generated ID
+              name: response['name'],
+              dosage: response['dosage'],
+              expiryDate: DateTime.parse(response['expiry_date']),
+              dailyIntakeTimes:
+                  List<String>.from(response['daily_intake_times']),
+              totalQuantity: response['total_quantity'],
+              quantityLeft: response['quantity_left'],
+              refillThreshold: response['refill_threshold'],
+            );
+
+            // 4️⃣ Save into Hive with the same Supabase ID
+            await medicineBox.put(medicine.id, medicine);
+
+            _mode = VoiceMode.normal;
+            return "Medicine ${medicine.name} saved successfully!";
+          } catch (e) {
+            _mode = VoiceMode.normal;
+            print("Error saving medicine: $e");
+            return "Sorry, I could not save the medicine.";
+          }
+        } else {
+          _mode = VoiceMode.normal;
+          return "Okay, I cancelled the medicine entry.";
+        }
+
+      default:
+        _mode = VoiceMode.normal;
+        return "Add medicine flow ended.";
+    }
+  }
+
+//for add medicine mode
   String _getUserName(Box<UserSettings> userBox, String childId) {
     try {
       final user = userBox.values.firstWhere(
@@ -371,7 +591,20 @@ class VoiceChatManager {
       final session = Hive.box('session');
 
       String currentChildId = session.get('childId', defaultValue: '');
+// 1️⃣ Start Add Medicine Flow
+      if (text.contains("add medicine") || text.contains("new medicine")) {
+        _mode = VoiceMode.addMedicine;
+        _step = 0;
+        _answers.clear();
+        String prompt = "Let's add a new medicine. What is the medicine name?";
+        await _speak(prompt);
+        return prompt;
+      }
 
+      // 2️⃣ If already in add medicine mode, process steps
+      if (_mode == VoiceMode.addMedicine) {
+        return await _handleAddMedicineStep(text);
+      }
       // User name queries
       if (text.contains("my name") || text.contains("what is my name")) {
         return _getUserName(userBox, currentChildId);
@@ -431,7 +664,7 @@ class VoiceChatManager {
         String userName = _getUserName(userBox, currentChildId);
         return "Hello $userName! How can I help you with your medicines today?";
       } else {
-        return "I can help you with: your medicines today, missed doses, refill alerts, expiring medicines, health reports, or medicine information. What would you like to know?";
+        return "I can help you with: your medicines today, missed doses, refill alerts, expiring medicines, health reports, or medicine information, Add medicine. What would you like to know?";
       }
     } catch (e) {
       print('Database error: $e');
@@ -457,5 +690,6 @@ class VoiceChatManager {
     _speech.stop();
     _tts.stop();
     _notifyListeners();
+    _mode = VoiceMode.normal;
   }
 }

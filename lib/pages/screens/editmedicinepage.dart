@@ -24,6 +24,8 @@ class _EditMedicinePageState extends State<EditMedicinePage> {
   late TextEditingController _nameController;
   late TextEditingController _dosageController;
   late TextEditingController _stockController;
+  late TextEditingController _thresholdController;
+
   DateTime? _selectedDate;
   int? _timesPerDay;
   late List<TimeOfDay?> _doseTimes;
@@ -34,6 +36,8 @@ class _EditMedicinePageState extends State<EditMedicinePage> {
     _dosageController = TextEditingController(text: widget.medicine.dosage);
     _stockController =
         TextEditingController(text: widget.medicine.quantityLeft.toString());
+    _thresholdController =
+        TextEditingController(text: widget.medicine.refillThreshold.toString());
     _selectedDate = widget.medicine.expiryDate;
     _timesPerDay = widget.medicine.dailyIntakeTimes.length;
     _doseTimes = widget.medicine.dailyIntakeTimes.map((t) {
@@ -91,100 +95,126 @@ class _EditMedicinePageState extends State<EditMedicinePage> {
     }
   }
 
-  void _saveChanges() async {
-    setState(() {
-      _isediting = true;
-    });
-    bool allTimesSelected = _timesPerDay != null &&
-        List.generate(_timesPerDay!, (i) => _doseTimes[i])
-            .every((t) => t != null);
+  
+  // void _saveChanges() async {
+  //   setState(() => _isediting = true);
 
-    if (_nameController.text.trim().isNotEmpty &&
-        _dosageController.text.trim().isNotEmpty &&
-        _stockController.text.trim().isNotEmpty &&
-        _selectedDate != null &&
-        _timesPerDay != null &&
-        allTimesSelected) {
-      try {
-        final box = await Hive.openBox<Medicine>('medicinesBox');
-        int addedQuantity = int.tryParse(_stockController.text.trim()) ?? 0;
+  //   bool allTimesSelected = _timesPerDay != null &&
+  //       List.generate(_timesPerDay!, (i) => _doseTimes[i])
+  //           .every((t) => t != null);
 
-        int oldQuantityLeft = widget.medicine.quantityLeft;
-        int oldTotalQuantity = widget.medicine.totalQuantity;
+  //   if (_nameController.text.trim().isEmpty ||
+  //       _dosageController.text.trim().isEmpty ||
+  //       _stockController.text.trim().isEmpty ||
+  //       _thresholdController.text.trim().isEmpty ||
+  //       _selectedDate == null ||
+  //       _timesPerDay == null ||
+  //       !allTimesSelected) {
+  //     AppSnackbar.show(context,
+  //         message: "Please fill all fields", success: false);
+  //     setState(() => _isediting = false);
+  //     return;
+  //   }
 
-        int newQuantityLeft = oldQuantityLeft + addedQuantity;
-        if (newQuantityLeft < 0) newQuantityLeft = 0; // Ensure not negative
+  //   try {
+  //     final box = Hive.box<Medicine>('medicinesBox');
 
-        int newTotalQuantity = oldTotalQuantity + addedQuantity;
-        if (newTotalQuantity < 0) newTotalQuantity = 0;
+  //     // Only keep the times user selected
+  //     final doseTimes = _doseTimes
+  //         .take(_timesPerDay!)
+  //         .map((t) =>
+  //             "${t!.hour.toString().padLeft(2, '0')}:${t.minute.toString().padLeft(2, '0')}")
+  //         .toList();
+  //     print(widget.medicineKey);
+  //     final updatedMedicine = Medicine(
+  //       id: widget.medicineKey, // Keep the original ID
+  //       name: _nameController.text.trim(),
+  //       dosage: _dosageController.text.trim(),
+  //       expiryDate: _selectedDate!,
+  //       dailyIntakeTimes: doseTimes,
+  //       quantityLeft: widget.medicine.quantityLeft, // preserve left
+  //       totalQuantity: int.parse(_stockController.text.trim()),
+  //       refillThreshold: int.parse(_thresholdController.text.trim()),
+  //     );
 
-        final updatedMedicine = Medicine(
-          id: widget.medicine.id, // Use existing ID
-          name: _nameController.text.trim(),
-          dosage: _dosageController.text.trim(),
-          expiryDate: _selectedDate!,
-          dailyIntakeTimes: _doseTimes
-              .take(_timesPerDay!)
-              .map((t) =>
-                  "${t!.hour.toString().padLeft(2, '0')}:${t.minute.toString().padLeft(2, '0')}")
-              .toList(),
-          quantityLeft: newQuantityLeft,
-          totalQuantity: newTotalQuantity,
-          refillThreshold: widget.medicine.refillThreshold,
-        );
-        print("Updated Medicine: $updatedMedicine");
-        // 1️⃣ Update locally in Hive
-        await box.put(widget.medicineKey, updatedMedicine);
+  //     // ✅ Overwrite using the correct Hive key
+      
+  //     await box.put(updatedMedicine.id, updatedMedicine);
 
-        // 2️⃣ Update in Supabase
+  //     // ✅ Update Supabase
+  //     await Supabase.instance.client.from('medicine').update({
+  //       'name': updatedMedicine.name,
+  //       'dosage': updatedMedicine.dosage,
+  //       'expiry_date': updatedMedicine.expiryDate.toIso8601String(),
+  //       'daily_intake_times': updatedMedicine.dailyIntakeTimes,
+  //       'total_quantity': updatedMedicine.totalQuantity,
+  //       'refill_threshold': updatedMedicine.refillThreshold,
+  //     }).eq('id', widget.medicineKey);
 
-        await Supabase.instance.client.from('medicine').update({
-          'name': updatedMedicine.name,
-          'dosage': updatedMedicine.dosage,
-          'expiry_date': updatedMedicine.expiryDate.toIso8601String(),
-          'daily_intake_times': updatedMedicine.dailyIntakeTimes,
-          'quantity_left': updatedMedicine.quantityLeft,
-          'total_quantity': updatedMedicine.totalQuantity,
-          'refill_threshold': updatedMedicine.refillThreshold,
-        }).eq(
-            'id', widget.medicineKey); // assuming medicineKey is Supabase's id
-        setState(() {
-          _isediting = false;
-        });
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text(
-              'Medicine Updated',
-              style: TextStyle(color: Colors.black),
-            ),
-            duration: Duration(seconds: 1),
-            behavior: SnackBarBehavior.floating,
-            backgroundColor: Color.fromARGB(255, 198, 252, 200),
-            margin: EdgeInsets.symmetric(vertical: 16.0, horizontal: 16.0),
-          ),
-        );
-
-        Navigator.pop(context);
-      } catch (e) {
-        setState(() {
-          _isediting = false;
-        });
-        AppSnackbar.show(context, message: "Failed to Update", success: false);
-      }
-    } else {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text(
-            'Please fill all fields!',
-            style: TextStyle(color: Colors.black),
-          ),
-          behavior: SnackBarBehavior.floating,
-          backgroundColor: Color.fromARGB(255, 198, 252, 200),
-          margin: EdgeInsets.symmetric(vertical: 16.0, horizontal: 16.0),
-        ),
-      );
-    }
+  //     AppSnackbar.show(context, message: "Medicine Updated", success: true);
+  //     Navigator.pop(context);
+  //   } catch (e) {
+  //     AppSnackbar.show(context, message: "Failed to Update", success: false);
+  //   } finally {
+  //     setState(() => _isediting = false);
+  //   }
+  // }
+void _saveChanges() async {
+  setState(() => _isediting = true);
+  bool allTimesSelected = _timesPerDay != null &&
+      List.generate(_timesPerDay!, (i) => _doseTimes[i]).every((t) => t != null);
+  
+  if (_nameController.text.trim().isEmpty ||
+      _dosageController.text.trim().isEmpty ||
+      _stockController.text.trim().isEmpty ||
+      _thresholdController.text.trim().isEmpty ||
+      _selectedDate == null ||
+      _timesPerDay == null ||
+      !allTimesSelected) {
+    AppSnackbar.show(context, message: "Please fill all fields", success: false);
+    setState(() => _isediting = false);
+    return;
   }
+  
+  try {
+    final box = Hive.box<Medicine>('medicinesBox');
+    
+    final doseTimes = _doseTimes.take(_timesPerDay!).map((t) =>
+        "${t!.hour.toString().padLeft(2, '0')}:${t.minute.toString().padLeft(2, '0')}").toList();
+    print("key"+widget.medicine.id);
+    final updatedMedicine = Medicine(
+      
+      id: widget.medicine.id, // Keep the original ID
+      name: _nameController.text.trim(),
+      dosage: _dosageController.text.trim(),
+      expiryDate: _selectedDate!,
+      dailyIntakeTimes: doseTimes,
+      quantityLeft: widget.medicine.quantityLeft,
+      totalQuantity: int.parse(_stockController.text.trim()),
+      refillThreshold: int.parse(_thresholdController.text.trim()),
+    );
+    
+    // CRITICAL: Use the same key pattern as _refreshData()
+    await box.put(widget.medicineKey, updatedMedicine); // Use medicine.id, not widget.medicineKey
+    
+    // Update Supabase
+    await Supabase.instance.client.from('medicine').update({
+      'name': updatedMedicine.name,
+      'dosage': updatedMedicine.dosage,
+      'expiry_date': updatedMedicine.expiryDate.toIso8601String(),
+      'daily_intake_times': updatedMedicine.dailyIntakeTimes,
+      'total_quantity': updatedMedicine.totalQuantity,
+      'refill_threshold': updatedMedicine.refillThreshold,
+    }).eq('id', widget.medicineKey);
+    
+    AppSnackbar.show(context, message: "Medicine Updated", success: true);
+    Navigator.pop(context);
+  } catch (e) {
+    AppSnackbar.show(context, message: "Failed to Update", success: false);
+  } finally {
+    setState(() => _isediting = false);
+  }
+}
 
   @override
   Widget build(BuildContext context) {
@@ -321,12 +351,24 @@ class _EditMedicinePageState extends State<EditMedicinePage> {
                 ),
               ),
               const SizedBox(height: 18),
+              TextFormField(
+                controller: _thresholdController,
+                decoration: InputDecoration(
+                  labelText: 'Refill Threshold',
+                  prefixIcon: Icon(Icons.warning, color: mainGreen),
+                  border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(12)),
+                ),
+                keyboardType: TextInputType.number,
+              ),
+              const SizedBox(height: 32),
+
               // Stock Quantity
               TextField(
                 controller: _stockController,
                 keyboardType: TextInputType.number,
                 decoration: InputDecoration(
-                  labelText: 'Add Quantity(new stock)',
+                  labelText: 'Total Quantity',
                   prefixIcon: Icon(Icons.inventory_2, color: mainGreen),
                   border: OutlineInputBorder(
                       borderRadius: BorderRadius.circular(12)),

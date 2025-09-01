@@ -48,8 +48,6 @@ class _VoiceChatOverlayState extends State<VoiceChatOverlay>
   Widget build(BuildContext context) {
     return GestureDetector(
       onTap: () {
-        _voiceManager.reset();
-        widget.onClose();
       },
       child: Container(
         color: Colors.black.withOpacity(0.7),
