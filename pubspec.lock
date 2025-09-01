@@ -981,6 +981,14 @@ packages:
       url: "https://pub.dev"
     source: hosted
     version: "5.0.9"
+  words_numbers:
+    dependency: "direct main"
+    description:
+      name: words_numbers
+      sha256: "7c99f616b496257ce7d863e3a708847822074d69fd27c2aeb0678905fe1e8b97"
+      url: "https://pub.dev"
+    source: hosted
+    version: "0.0.3"
   xdg_directories:
     dependency: transitive
     description:

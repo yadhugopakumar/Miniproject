@@ -4,6 +4,7 @@ import 'package:medremind/pages/screens/editmedicinepage.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../Hivemodel/medicine.dart';
 import '../Hivemodel/user_settings.dart';
+import '../utils/customsnackbar.dart';
 
 class RefillTrackerPage extends StatefulWidget {
   const RefillTrackerPage({super.key});
@@ -20,9 +21,8 @@ class _RefillTrackerPageState extends State<RefillTrackerPage> {
       final userBox = Hive.box('settingsBox');
       final userSettings = userBox.get('user') as UserSettings?;
       if (userSettings == null) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text("No user settings found")),
-        );
+        AppSnackbar.show(context,
+            message: "No user settings found", success: true);
         return;
       }
       final childId = userSettings.childId;
@@ -37,7 +37,7 @@ class _RefillTrackerPageState extends State<RefillTrackerPage> {
         final box = Hive.box<Medicine>('medicinesBox');
 
         // Clear old data before inserting fresh data
-        await box.clear();
+           await box.clear(); // clear old data
 
         for (final item in response) {
           final medicine = Medicine(
@@ -51,14 +51,12 @@ class _RefillTrackerPageState extends State<RefillTrackerPage> {
             dailyIntakeTimes:
                 List<String>.from(item['daily_intake_times'] ?? []),
           );
-          await box.add(medicine);
+          await box.put(medicine.id, medicine);
         }
       }
     } catch (e) {
-      debugPrint("Error refreshing data: $e");
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text("Failed to fetch updates from server")),
-      );
+      AppSnackbar.show(context,
+          message: "Failed to fetch updates from server", success: true);
     }
   }
 
@@ -100,7 +98,7 @@ class _RefillTrackerPageState extends State<RefillTrackerPage> {
                 separatorBuilder: (_, __) => const SizedBox(height: 16),
                 itemBuilder: (context, index) {
                   final med = meds[index];
-                  final lowStock = med.quantityLeft <= med.totalQuantity * 0.25;
+                  final lowStock = med.quantityLeft <= med.refillThreshold;
 
                   return Card(
                     color: Colors.teal[900],
@@ -157,8 +155,96 @@ class _RefillTrackerPageState extends State<RefillTrackerPage> {
                             mainAxisAlignment: MainAxisAlignment.end,
                             children: [
                               TextButton.icon(
-                                onPressed: () {
-                                  Navigator.push(
+                                onPressed: () async {
+                                  final TextEditingController _stockController =
+                                      TextEditingController();
+
+                                  bool? added = await showDialog<bool>(
+                                    context: context,
+                                    builder: (context) => AlertDialog(
+                                      title: const Text("Add Stock"),
+                                      content: TextField(
+                                        controller: _stockController,
+                                        keyboardType: TextInputType.number,
+                                        decoration: const InputDecoration(
+                                          labelText: "Quantity to add",
+                                          border: OutlineInputBorder(),
+                                        ),
+                                      ),
+                                      actions: [
+                                        TextButton(
+                                          onPressed: () =>
+                                              Navigator.pop(context, false),
+                                          child: const Text("Cancel"),
+                                        ),
+                                        ElevatedButton(
+                                          onPressed: () {
+                                            if (_stockController.text
+                                                .trim()
+                                                .isEmpty) return;
+                                            Navigator.pop(context, true);
+                                          },
+                                          child: const Text("Add"),
+                                        ),
+                                      ],
+                                    ),
+                                  );
+
+                                  if (added == true) {
+                                    int addedQty = int.tryParse(
+                                            _stockController.text.trim()) ??
+                                        0;
+                                    if (addedQty <= 0) return;
+
+                                    final box =
+                                        Hive.box<Medicine>('medicinesBox');
+
+                                    int newTotal = med.totalQuantity + addedQty;
+                                    int newLeft = med.quantityLeft +
+                                        addedQty; // optional: increase quantityLeft too
+
+                                    final updatedMedicine = Medicine(
+                                      id: med.id,
+                                      name: med.name,
+                                      dosage: med.dosage,
+                                      expiryDate: med.expiryDate,
+                                      dailyIntakeTimes: med.dailyIntakeTimes,
+                                      totalQuantity: newTotal,
+                                      quantityLeft: newLeft,
+                                      refillThreshold: med.refillThreshold,
+                                    );
+
+                                    // Update Hive
+                                    await box.put(med.id, updatedMedicine);
+
+                                    // Update Supabase
+                                    await Supabase.instance.client
+                                        .from('medicine')
+                                        .update({
+                                      'total_quantity': newTotal,
+                                      'quantity_left': newLeft,
+                                    }).eq('id', med.id);
+
+                                    AppSnackbar.show(context,
+                                        message: "Stock updated successfully",
+                                        success: true);
+                                   
+                                  }
+                                },
+                                icon: const Icon(
+                                  Icons.stacked_bar_chart_outlined,
+                                  color: Color.fromARGB(255, 255, 242, 123),
+                                ),
+                                label: const Text(
+                                  "Add Stock",
+                                  style: TextStyle(
+                                    color: Color.fromARGB(255, 255, 242, 123),
+                                  ),
+                                ),
+                              ),
+                              TextButton.icon(
+                                onPressed: () async {
+                                  await Navigator.push(
                                     context,
                                     MaterialPageRoute(
                                       builder: (_) => EditMedicinePage(
@@ -207,26 +293,13 @@ class _RefillTrackerPageState extends State<RefillTrackerPage> {
                                           .delete()
                                           .eq('id', med.id); // Supabase delete
                                       await med.delete(); // Hive delete
-
-                                      ScaffoldMessenger.of(context)
-                                          .showSnackBar(
-                                        SnackBar(
-                                          behavior: SnackBarBehavior.floating,
-                                          duration: const Duration(seconds: 1),
-                                          
-                                          content: Text(
-                                              "Medicine ${med.name} deleted successfully"),
-                                        ),
-                                      );
+                                      AppSnackbar.show(context,
+                                          message: "deleted successfully",
+                                          success: true);
                                     } catch (e) {
-                                      ScaffoldMessenger.of(context)
-                                          .showSnackBar(
-                                            
-                                        SnackBar(
-                                          behavior: SnackBarBehavior.floating,
-                                            content: Text(
-                                                "Failed to delete on server")),
-                                      );
+                                      AppSnackbar.show(context,
+                                          message: "Failed to delete on server",
+                                          success: false);
                                     }
                                   }
                                 },
