@@ -25,13 +25,14 @@ class MedicineAdapter extends TypeAdapter<Medicine> {
       totalQuantity: fields[5] as int,
       quantityLeft: fields[6] as int,
       refillThreshold: fields[7] as int,
+      instructions: fields[9] as String?,
     );
   }
 
   @override
   void write(BinaryWriter writer, Medicine obj) {
     writer
-      ..writeByte(8)
+      ..writeByte(9)
       ..writeByte(0)
       ..write(obj.name)
       ..writeByte(1)
@@ -47,7 +48,9 @@ class MedicineAdapter extends TypeAdapter<Medicine> {
       ..writeByte(7)
       ..write(obj.refillThreshold)
       ..writeByte(8)
-      ..write(obj.id);
+      ..write(obj.id)
+      ..writeByte(9)
+      ..write(obj.instructions);
   }
 
   @override
