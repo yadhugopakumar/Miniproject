@@ -25,7 +25,8 @@ class Medicine extends HiveObject {
   int refillThreshold; // Alert if quantityLeft <= threshold
   @HiveField(8)
   String id; // instead of int id
-
+ @HiveField(9) // 👈 new field (use a NEW index number!)
+  String? instructions; // nullable
   Medicine({
     required this.id,
     required this.name,
@@ -35,5 +36,6 @@ class Medicine extends HiveObject {
     required this.totalQuantity,
     required this.quantityLeft,
     required this.refillThreshold,
+    this.instructions,
   });
 }

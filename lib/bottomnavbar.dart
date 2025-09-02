@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:hive_flutter/adapters.dart';
+import 'package:medremind/Hivemodel/chat_message.dart';
 import 'package:medremind/pages/auth/loginpage.dart';
 import 'package:medremind/pages/chatpage.dart';
 import 'package:medremind/pages/homepage.dart';
@@ -112,299 +113,141 @@ class _BottomnavbarState extends State<Bottomnavbar>
         AppSnackbar.show(context, message: error, success: false);
       }
     };
-    // void _showAnswer(String text) {
-    //   showDialog(
-    //     context: context,
-    //     builder: (context) => AlertDialog(
-    //       title: const Text('MedRemind Response'),
-    //       content: Text(text),
-    //       actions: [
-    //         TextButton(
-    //           onPressed: () => Navigator.pop(context),
-    //           child: const Text('OK'),
-    //         ),
-    //       ],
-    //     ),
-    //   );
-    // }
-// void _showAnswer(String text) {
-//   showDialog(
-//     context: context,
-//     barrierDismissible: true,
-//     builder: (context) => Dialog(
-//       backgroundColor: Colors.transparent,
-//       child: Container(
-//         margin: EdgeInsets.symmetric(horizontal: 20, vertical: 50),
-//         child: Material(
-//           color: Colors.transparent,
-//           child: Container(
-//             decoration: BoxDecoration(
-//               gradient: LinearGradient(
-//                 begin: Alignment.topLeft,
-//                 end: Alignment.bottomRight,
-//                 colors: [
-//                   Color(0xFF4CAF50).withOpacity(0.9),
-//                   Color(0xFF81C784).withOpacity(0.9),
-//                 ],
-//               ),
-//               borderRadius: BorderRadius.circular(20),
-//               boxShadow: [
-//                 BoxShadow(
-//                   color: Colors.black.withOpacity(0.3),
-//                   blurRadius: 20,
-//                   spreadRadius: 5,
-//                   offset: Offset(0, 10),
-//                 ),
-//               ],
-//             ),
-//             child: Stack(
-//               children: [
-//                 // Chat bubble tail
-//                 Positioned(
-//                   left: 30,
-//                   top: -10,
-//                   child: Container(
-//                     width: 20,
-//                     height: 20,
-//                     decoration: BoxDecoration(
-//                       color: Color(0xFF4CAF50),
-//                       borderRadius: BorderRadius.circular(3),
-//                     ),
-//                     transform: Matrix4.rotationZ(0.785398), // 45 degrees
-//                   ),
-//                 ),
-//                 Padding(
-//                   padding: EdgeInsets.all(24),
-//                   child: Column(
-//                     mainAxisSize: MainAxisSize.min,
-//                     crossAxisAlignment: CrossAxisAlignment.start,
-//                     children: [
-//                       // AI Avatar and Header
-//                       Row(
-//                         children: [
-//                           Container(
-//                             width: 40,
-//                             height: 40,
-//                             decoration: BoxDecoration(
-//                               color: Colors.white,
-//                               borderRadius: BorderRadius.circular(20),
-//                             ),
-//                             child: Icon(
-//                               Icons.android,
-//                               color: Colors.green[700],
-//                               size: 24,
-//                             ),
-//                           ),
-//                           SizedBox(width: 12),
-//                           Text(
-//                             'MedRemind AI',
-//                             style: TextStyle(
-//                               color: Colors.white,
-//                               fontSize: 18,
-//                               fontWeight: FontWeight.bold,
-//                             ),
-//                           ),
-//                         ],
-//                       ),
-//                       SizedBox(height: 16),
-                      
-//                       // Response text with typing animation
-//                       AnimatedContainer(
-//                         duration: Duration(milliseconds: 500),
-//                         child: Text(
-//                           text,
-//                           style: TextStyle(
-//                             color: Colors.white,
-//                             fontSize: 16,
-//                             height: 1.4,
-//                           ),
-//                         ),
-//                       ),
-                      
-//                       SizedBox(height: 20),
-                      
-//                       // Action buttons
-//                       Row(
-//                         mainAxisAlignment: MainAxisAlignment.end,
-//                         children: [
-//                           TextButton(
-//                             onPressed: () {
-//                               Navigator.pop(context);
-//                               _handleMicPressed(); // Ask another question
-//                             },
-//                             style: TextButton.styleFrom(
-//                               backgroundColor: Colors.white.withOpacity(0.2),
-//                               shape: RoundedRectangleBorder(
-//                                 borderRadius: BorderRadius.circular(20),
-//                               ),
-//                             ),
-//                             child: Text(
-//                               '🎤 Ask More',
-//                               style: TextStyle(color: Colors.white),
-//                             ),
-//                           ),
-//                           SizedBox(width: 8),
-//                           TextButton(
-//                             onPressed: () => Navigator.pop(context),
-//                             style: TextButton.styleFrom(
-//                               backgroundColor: Colors.white,
-//                               shape: RoundedRectangleBorder(
-//                                 borderRadius: BorderRadius.circular(20),
-//                               ),
-//                             ),
-//                             child: Text(
-//                               'Got it!',
-//                               style: TextStyle(color: Colors.green[700]),
-//                             ),
-//                           ),
-//                         ],
-//                       ),
-//                     ],
-//                   ),
-//                 ),
-//               ],
-//             ),
-//           ),
-//         ),
-//       ),
-//     ),
-//   );
-// }
-void _showAnswer(String text) {
-  showDialog(
-    context: context,
-    barrierDismissible: true,
-    builder: (context) => Dialog(
-      backgroundColor: Colors.transparent,
-      child: Container(
-        margin: EdgeInsets.all(4),
-        decoration: BoxDecoration(
-          gradient: LinearGradient(
-            begin: Alignment.topCenter,
-            end: Alignment.bottomCenter,
-            colors: [
-              Colors.white,
-              Colors.green[50]!,
-            ],
-          ),
-          borderRadius: BorderRadius.circular(25),
-          boxShadow: [
-            BoxShadow(
-              color: Colors.black.withOpacity(0.1),
-              blurRadius: 25,
-              spreadRadius: 5,
-            ),
-          ],
-        ),
-        child: ClipRRect(
-          borderRadius: BorderRadius.circular(25),
-          child: Padding(
-            padding: EdgeInsets.all(24),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                // Animated AI icon
-                TweenAnimationBuilder(
-                  tween: Tween(begin: 0.0, end: 1.0),
-                  duration: Duration(milliseconds: 800),
-                  builder: (context, double value, child) {
-                    return Transform.scale(
-                      scale: value,
-                      child: Container(
-                        width: 60,
-                        height: 60,
-                        decoration: BoxDecoration(
-                          gradient: LinearGradient(
-                            colors: [Colors.blue[400]!, Colors.green[400]!],
-                          ),
-                          shape: BoxShape.circle,
-                          boxShadow: [
-                            BoxShadow(
-                              color: Colors.blue.withOpacity(0.3),
-                              blurRadius: 15,
-                              spreadRadius: 2,
-                            ),
-                          ],
-                        ),
-                        child: Icon(
-                          Icons.assistant,
-                          color: Colors.white,
-                          size: 30,
-                        ),
-                      ),
-                    );
-                  },
-                ),
-                
-                SizedBox(height: 16),
-                
-                Text(
-                  'MedRemind Assistant',
-                  style: TextStyle(
-                    fontSize: 20,
-                    fontWeight: FontWeight.w600,
-                    color: Colors.grey[700],
-                  ),
-                ),
-                
-                SizedBox(height: 20),
-                
-                // Response with subtle background
-                Container(
-                  width: double.infinity,
-                  padding: EdgeInsets.all(20),
-                  decoration: BoxDecoration(
-                    color: Colors.white,
-                    borderRadius: BorderRadius.circular(16),
-                    border: Border.all(
-                      color: Colors.blue[100]!,
-                      width: 1.5,
-                    ),
-                  ),
-                  child: Text(
-                    text,
-                    style: TextStyle(
-                      fontSize: 16,
-                      height: 1.6,
-                      color: Colors.grey[800],
-                    ),
-                    textAlign: TextAlign.left,
-                  ),
-                ),
-                
-                SizedBox(height: 24),
-                
-                // Single action button
-                SizedBox(
-                  width: double.infinity,
-                  child: ElevatedButton(
-                    onPressed: () => Navigator.pop(context),
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: Colors.green[600],
-                      foregroundColor: Colors.white,
-                      elevation: 3,
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(16),
-                      ),
-                      padding: EdgeInsets.symmetric(vertical: 16),
-                    ),
-                    child: Text(
-                      'Got it! 👍',
-                      style: TextStyle(
-                        fontSize: 16,
-                        fontWeight: FontWeight.w600,
-                      ),
-                    ),
-                  ),
+    void _showAnswer(String text) {
+      showDialog(
+        context: context,
+        barrierDismissible: true,
+        builder: (context) => Dialog(
+          backgroundColor: Colors.transparent,
+          child: Container(
+            margin: EdgeInsets.all(4),
+            decoration: BoxDecoration(
+              gradient: LinearGradient(
+                begin: Alignment.topCenter,
+                end: Alignment.bottomCenter,
+                colors: [
+                  Colors.white,
+                  Colors.green[50]!,
+                ],
+              ),
+              borderRadius: BorderRadius.circular(25),
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black.withOpacity(0.1),
+                  blurRadius: 25,
+                  spreadRadius: 5,
                 ),
               ],
             ),
+            child: ClipRRect(
+              borderRadius: BorderRadius.circular(25),
+              child: Padding(
+                padding: EdgeInsets.all(24),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    // Animated AI icon
+                    TweenAnimationBuilder(
+                      tween: Tween(begin: 0.0, end: 1.0),
+                      duration: Duration(milliseconds: 800),
+                      builder: (context, double value, child) {
+                        return Transform.scale(
+                          scale: value,
+                          child: Container(
+                            width: 60,
+                            height: 60,
+                            decoration: BoxDecoration(
+                              gradient: LinearGradient(
+                                colors: [Colors.blue[400]!, Colors.green[400]!],
+                              ),
+                              shape: BoxShape.circle,
+                              boxShadow: [
+                                BoxShadow(
+                                  color: Colors.blue.withOpacity(0.3),
+                                  blurRadius: 15,
+                                  spreadRadius: 2,
+                                ),
+                              ],
+                            ),
+                            child: Icon(
+                              Icons.assistant,
+                              color: Colors.white,
+                              size: 30,
+                            ),
+                          ),
+                        );
+                      },
+                    ),
+
+                    SizedBox(height: 16),
+
+                    Text(
+                      'MedRemind Assistant',
+                      style: TextStyle(
+                        fontSize: 20,
+                        fontWeight: FontWeight.w600,
+                        color: Colors.grey[700],
+                      ),
+                    ),
+
+                    SizedBox(height: 20),
+
+                    // Response with subtle background
+                    Container(
+                      width: double.infinity,
+                      padding: EdgeInsets.all(20),
+                      decoration: BoxDecoration(
+                        color: Colors.white,
+                        borderRadius: BorderRadius.circular(16),
+                        border: Border.all(
+                          color: Colors.blue[100]!,
+                          width: 1.5,
+                        ),
+                      ),
+                      child: Text(
+                        text,
+                        style: TextStyle(
+                          fontSize: 16,
+                          height: 1.6,
+                          color: Colors.grey[800],
+                        ),
+                        textAlign: TextAlign.left,
+                      ),
+                    ),
+
+                    SizedBox(height: 24),
+
+                    // Single action button
+                    SizedBox(
+                      width: double.infinity,
+                      child: ElevatedButton(
+                        onPressed: () => Navigator.pop(context),
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: Colors.green[600],
+                          foregroundColor: Colors.white,
+                          elevation: 3,
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(16),
+                          ),
+                          padding: EdgeInsets.symmetric(vertical: 16),
+                        ),
+                        child: Text(
+                          'Got it! 👍',
+                          style: TextStyle(
+                            fontSize: 16,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
           ),
         ),
-      ),
-    ),
-  );
-}
+      );
+    }
 
     _voiceManager.onShowAnswer = (response) {
       if (mounted) {
@@ -808,7 +651,10 @@ void _showAnswer(String text) {
                                     .clear();
                                 await Hive.box<HistoryEntry>('historyBox')
                                     .clear();
+                                Hive.box<ChatMessage>('chatMessages')
+                                    .clear(); // Fixed box name
                                 await Hive.box('session').clear();
+
                                 Navigator.pushReplacement(
                                   context,
                                   MaterialPageRoute(

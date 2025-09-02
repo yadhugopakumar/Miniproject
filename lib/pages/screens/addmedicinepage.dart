@@ -21,6 +21,7 @@ class _AddMedicinePageState extends State<AddMedicinePage> {
   final _dosageController = TextEditingController();
   final _quantityController = TextEditingController();
   final _thresholdController = TextEditingController();
+  final _instructionsController = TextEditingController();
   bool _isloading = false;
   DateTime? _selectedDate;
   int? _timesPerDay;
@@ -113,6 +114,7 @@ class _AddMedicinePageState extends State<AddMedicinePage> {
         'quantity_left': int.parse(_quantityController.text),
         'refill_threshold': int.parse(_thresholdController.text),
         'created_at': DateTime.now().toIso8601String(),
+        
       }).select();
 
       if (response.isEmpty) {
@@ -133,6 +135,9 @@ class _AddMedicinePageState extends State<AddMedicinePage> {
         totalQuantity: int.parse(_quantityController.text),
         quantityLeft: int.parse(_quantityController.text),
         refillThreshold: int.parse(_thresholdController.text),
+        instructions: _instructionsController.text.trim().isEmpty
+            ? null
+            : _instructionsController.text.trim(),
       );
       // 4️⃣ Save to Hive first
       await medicineBox.add(medicine);
@@ -329,6 +334,18 @@ class _AddMedicinePageState extends State<AddMedicinePage> {
                   ),
                 ),
               ),
+               const SizedBox(height: 16),
+              TextFormField(
+                controller: _instructionsController,
+                maxLines: 1,
+                decoration: InputDecoration(
+                  labelText: 'Instructions (optional)',
+                  prefixIcon: Icon(Icons.edit_note_sharp, color: mainGreen),
+                ),
+                keyboardType: TextInputType.text,
+               
+              ),
+              const SizedBox(height: 16),
               const SizedBox(height: 32),
               ElevatedButton(
                 onPressed: _saveMedicine,
