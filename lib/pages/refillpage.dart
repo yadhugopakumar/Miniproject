@@ -3,7 +3,9 @@ import 'package:hive_flutter/hive_flutter.dart';
 import 'package:medremind/pages/screens/editmedicinepage.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../Hivemodel/medicine.dart';
+import '../Hivemodel/alarm_model.dart';
 import '../Hivemodel/user_settings.dart';
+import '../reminder/services/alarm_service.dart';
 import '../utils/customsnackbar.dart';
 
 class RefillTrackerPage extends StatefulWidget {
@@ -18,7 +20,7 @@ class _RefillTrackerPageState extends State<RefillTrackerPage> {
 
   Future<void> _refreshData() async {
     try {
-      final userBox = Hive.box('settingsBox');
+    final userBox = Hive.box<UserSettings>('settingsBox'); // ✅ FIXED
       final userSettings = userBox.get('user') as UserSettings?;
       if (userSettings == null) {
         AppSnackbar.show(context,
@@ -37,7 +39,7 @@ class _RefillTrackerPageState extends State<RefillTrackerPage> {
         final box = Hive.box<Medicine>('medicinesBox');
 
         // Clear old data before inserting fresh data
-           await box.clear(); // clear old data
+        await box.clear(); // clear old data
 
         for (final item in response) {
           final medicine = Medicine(
@@ -55,8 +57,9 @@ class _RefillTrackerPageState extends State<RefillTrackerPage> {
         }
       }
     } catch (e) {
+      print(e);
       AppSnackbar.show(context,
-          message: "Failed to fetch updates from server", success: true);
+          message: "Failed to fetch updates from server", success: false);
     }
   }
 
@@ -228,7 +231,6 @@ class _RefillTrackerPageState extends State<RefillTrackerPage> {
                                     AppSnackbar.show(context,
                                         message: "Stock updated successfully",
                                         success: true);
-                                   
                                   }
                                 },
                                 icon: const Icon(
@@ -288,18 +290,40 @@ class _RefillTrackerPageState extends State<RefillTrackerPage> {
 
                                   if (confirmDelete == true) {
                                     try {
+                                      // 1. Cancel alarm first
+                                      final alarmBox =
+                                          Hive.box<AlarmModel>('alarms');
+                                      final relatedAlarms = alarmBox.values
+                                          .where((alarm) =>
+                                              alarm.medicineName == med.name)
+                                          .toList();
+
+                                      // 🗑 Cancel and delete each alarm
+                                      for (var alarm in relatedAlarms) {
+                                        await AlarmService.deleteAlarm(
+                                            alarm.id);
+                                        await alarmBox.delete(alarm.id);
+                                      }
+                                      // 2. Delete from Supabase
                                       await _supabase
                                           .from('medicine')
                                           .delete()
-                                          .eq('id', med.id); // Supabase delete
-                                      await med.delete(); // Hive delete
-                                      AppSnackbar.show(context,
-                                          message: "deleted successfully",
-                                          success: true);
+                                          .eq('id', med.id);
+
+                                      // 3. Delete from Hive
+                                      await med.delete();
+
+                                      AppSnackbar.show(
+                                        context,
+                                        message: "Deleted successfully",
+                                        success: true,
+                                      );
                                     } catch (e) {
-                                      AppSnackbar.show(context,
-                                          message: "Failed to delete on server",
-                                          success: false);
+                                      AppSnackbar.show(
+                                        context,
+                                        message: "Failed to delete medicine",
+                                        success: false,
+                                      );
                                     }
                                   }
                                 },

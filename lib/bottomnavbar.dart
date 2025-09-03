@@ -1,5 +1,8 @@
+import 'package:audioplayers/audioplayers.dart';
 import 'package:flutter/material.dart';
+import 'package:fluttertoast/fluttertoast.dart';
 import 'package:hive_flutter/adapters.dart';
+import 'package:medremind/Hivemodel/alarm_model.dart';
 import 'package:medremind/Hivemodel/chat_message.dart';
 import 'package:medremind/pages/auth/loginpage.dart';
 import 'package:medremind/pages/chatpage.dart';
@@ -9,6 +12,8 @@ import 'package:medremind/pages/innerpages/reportpage.dart';
 import 'package:medremind/pages/refillpage.dart';
 import 'package:medremind/pages/historypage.dart';
 import 'package:medremind/utils/customsnackbar.dart';
+import 'package:permission_handler/permission_handler.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 import '../chatmanager/chat_manager.dart';
 import '../chatmanager/voice_chat_overlay.dart';
@@ -28,6 +33,7 @@ class Bottomnavbar extends StatefulWidget {
 class _BottomnavbarState extends State<Bottomnavbar>
     with TickerProviderStateMixin {
   late int _selectedIndex;
+  DateTime? _lastBackPressTime;
 
 // Use childId for further queries, navigation, etc.
   final session = Hive.box('session');
@@ -35,9 +41,16 @@ class _BottomnavbarState extends State<Bottomnavbar>
   final VoiceChatManager _voiceManager = VoiceChatManager();
   bool _showVoiceOverlay = false;
   //for chatpage
-
+  final AudioPlayer _player = AudioPlayer();
   late AnimationController _bottomBarController;
   late Animation<Offset> _bottomBarAnimation;
+
+  final List<String> availableSounds = [
+    "alarm1.mp3",
+    "alarm2.mp3",
+    "alarm3.mp3",
+  ];
+  String? _selectedSound;
 
   @override
   void initState() {
@@ -75,6 +88,126 @@ class _BottomnavbarState extends State<Bottomnavbar>
         }
       });
     };
+
+    getSelectedSound().then((value) {
+      setState(() => _selectedSound = value);
+    });
+    _requestPermissions();
+  }
+
+  Future<void> saveSelectedSound(String path) async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString("selectedSound", path);
+  }
+
+  Future<String> getSelectedSound() async {
+    final prefs = await SharedPreferences.getInstance();
+    return prefs.getString("selectedSound") ?? availableSounds.first;
+  }
+
+  Future _requestPermissions() async {
+    await Permission.notification.request();
+    await Permission.ignoreBatteryOptimizations.request();
+    await Permission.ignoreBatteryOptimizations.request();
+
+    // Check and request exact alarm permission specifically
+    final status = await Permission.scheduleExactAlarm.status;
+    print('Schedule exact alarm permission: $status.');
+    if (status.isDenied) {
+      print('Requesting schedule exact alarm permission...');
+      final res = await Permission.scheduleExactAlarm.request();
+      print(
+          'Schedule exact alarm permission ${res.isGranted ? '' : 'not'} granted.');
+    }
+  }
+
+  bool _vibrationEnabled = true; // default
+
+  void _chooseSound() async {
+    String? sound = await showDialog<String>(
+      context: context,
+      builder: (context) {
+        String? selectedSound = _selectedSound;
+        bool tempVibration = _vibrationEnabled;
+
+        return StatefulBuilder(
+          builder: (context, setState) => AlertDialog(
+            title: const Text("Choose Notification Sound"),
+            content: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                // List of sounds with preview on tap
+                ListView.builder(
+                  shrinkWrap: true,
+                  itemCount: availableSounds.length,
+                  itemBuilder: (context, index) {
+                    final soundFile = availableSounds[index];
+                    return RadioListTile<String>(
+                      title: Text(soundFile),
+                      value: soundFile,
+                      groupValue: selectedSound,
+                      onChanged: (value) async {
+                        setState(() => selectedSound = value);
+
+                        // play preview
+                        await _player.stop();
+                        await _player.play(AssetSource("sounds/$soundFile"));
+                        print("Playing $soundFile");
+                      },
+                    );
+                  },
+                ),
+                const Divider(),
+                // Vibration toggle
+                SwitchListTile(
+                  title: const Text("Vibration"),
+                  secondary: const Icon(Icons.vibration),
+                  value: tempVibration,
+                  onChanged: (val) {
+                    setState(() => tempVibration = val);
+                  },
+                ),
+              ],
+            ),
+            actions: [
+              TextButton(
+                onPressed: () {
+                  _player.stop();
+                  Navigator.pop(context);
+                },
+                child: const Text("Cancel"),
+              ),
+              ElevatedButton(
+                onPressed: () {
+                  setState(() {
+                    _vibrationEnabled = tempVibration;
+                    _selectedSound = selectedSound;
+                  });
+                  saveSelectedSound(_selectedSound!);
+                  saveVibrationPref(_vibrationEnabled);
+
+                  _player.stop();
+                  Navigator.pop(context, selectedSound);
+                },
+                child: const Text("OK"),
+              ),
+            ],
+          ),
+        );
+      },
+    );
+  }
+
+  /// Save vibration preference
+  Future<void> saveVibrationPref(bool value) async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setBool("vibrationEnabled", value);
+  }
+
+  /// Load vibration preference
+  Future<bool> getVibrationPref() async {
+    final prefs = await SharedPreferences.getInstance();
+    return prefs.getBool("vibrationEnabled") ?? true;
   }
 
   void _handleMicPressed() {
@@ -287,134 +420,151 @@ class _BottomnavbarState extends State<Bottomnavbar>
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      drawer: _buildDrawer(), // << Add this here
-      extendBody: true,
-      floatingActionButtonLocation: FloatingActionButtonLocation.centerDocked,
-      floatingActionButton: _selectedIndex != 1
-          ? AnimatedContainer(
-              duration: Duration(milliseconds: 300),
-              transform: Matrix4.translationValues(
-                  0,
-                  _showVoiceOverlay
-                      ? 200
-                      : 0, // Move FAB down when overlay is active
-                  0),
-              child: Padding(
-                padding: const EdgeInsets.only(bottom: 9),
-                child: Material(
-                  color: const Color.fromARGB(255, 93, 255, 101),
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(35),
-                  ),
-                  elevation: 20,
-                  child: Container(
-                    height: 65.0,
-                    width: 65.0,
-                    child: FloatingActionButton(
-                      // backgroundColor: Color.fromARGB(255, 75, 44, 90),
-                      backgroundColor: const Color.fromARGB(255, 16, 59, 65),
+    return WillPopScope(
+      onWillPop: () async {
+        DateTime now = DateTime.now();
+        if (_lastBackPressTime == null ||
+            now.difference(_lastBackPressTime!) > const Duration(seconds: 2)) {
+          _lastBackPressTime = now;
+          Fluttertoast.showToast(
+            msg: "Press back again to exit",
+            toastLength: Toast.LENGTH_SHORT,
+            gravity: ToastGravity.BOTTOM,
+          );
+          return false; // Don't exit yet
+        }
+        return true; // Exit app
+      },
+      child: Scaffold(
+        drawer: _buildDrawer(), // << Add this here
+        extendBody: true,
+        floatingActionButtonLocation: FloatingActionButtonLocation.centerDocked,
+        floatingActionButton: _selectedIndex != 1
+            ? AnimatedContainer(
+                duration: Duration(milliseconds: 300),
+                transform: Matrix4.translationValues(
+                    0,
+                    _showVoiceOverlay
+                        ? 200
+                        : 0, // Move FAB down when overlay is active
+                    0),
+                child: Padding(
+                  padding: const EdgeInsets.only(bottom: 9),
+                  child: Material(
+                    color: const Color.fromARGB(255, 93, 255, 101),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(35),
+                    ),
+                    elevation: 20,
+                    child: Container(
+                      height: 65.0,
+                      width: 65.0,
+                      child: FloatingActionButton(
+                        // backgroundColor: Color.fromARGB(255, 75, 44, 90),
+                        backgroundColor: const Color.fromARGB(255, 16, 59, 65),
 
-                      onPressed: _handleMicPressed,
-                      child: const Icon(
-                        Icons.mic_none_sharp,
-                        size: 33,
-                        color: Color.fromARGB(255, 174, 233, 156),
-                        // color: Color.fromARGB(255, 255, 216, 42),
+                        onPressed: _handleMicPressed,
+                        child: const Icon(
+                          Icons.mic_none_sharp,
+                          size: 33,
+                          color: Color.fromARGB(255, 174, 233, 156),
+                          // color: Color.fromARGB(255, 255, 216, 42),
+                        ),
                       ),
                     ),
                   ),
                 ),
-              ),
-            )
-          : null,
-      bottomNavigationBar: _selectedIndex != 1
-          ? SlideTransition(
-              position: _bottomBarAnimation,
-              child: AbsorbPointer(
-                absorbing: _showVoiceOverlay,
-                child: Padding(
-                  padding:
-                      const EdgeInsets.only(left: 10, right: 10, bottom: 15),
-                  child: BottomAppBar(
-                    color: Colors.transparent,
-                    shape: const CircularNotchedRectangle(),
-                    notchMargin: 6.0,
-                    elevation: 0,
-                    child: Container(
-                        decoration: BoxDecoration(
-                          color: Colors.green[900]!.withOpacity(0.85),
-                          // color: Colors.purple[900]!.withOpacity(0.8),
+              )
+            : null,
+        bottomNavigationBar: _selectedIndex != 1
+            ? SlideTransition(
+                position: _bottomBarAnimation,
+                child: AbsorbPointer(
+                  absorbing: _showVoiceOverlay,
+                  child: Padding(
+                    padding:
+                        const EdgeInsets.only(left: 10, right: 10, bottom: 15),
+                    child: BottomAppBar(
+                      color: Colors.transparent,
+                      shape: const CircularNotchedRectangle(),
+                      notchMargin: 6.0,
+                      elevation: 0,
+                      child: Container(
+                          decoration: BoxDecoration(
+                            color: Colors.green[900]!.withOpacity(0.85),
+                            // color: Colors.purple[900]!.withOpacity(0.8),
 
-                          borderRadius: BorderRadius.circular(15),
-                          border: Border.all(
-                            color: Colors.green[900]!,
-                            width: 0.1,
-                          ),
-                        ),
-                        height: kToolbarHeight + 5,
-                        child: Row(
-                          mainAxisAlignment: MainAxisAlignment.spaceAround,
-                          children: [
-                            _buildNavItem(
-                                icon: Icons.home_outlined,
-                                index: 0,
-                                label: "Home"),
-                            _buildNavItem(
-                              icon: Icons.message_outlined,
-                              index: 1,
-                              label: "Chat",
+                            borderRadius: BorderRadius.circular(15),
+                            border: Border.all(
+                              color: Colors.green[900]!,
+                              width: 0.1,
                             ),
-                            Stack(
-                              alignment: Alignment.topCenter,
-                              clipBehavior: Clip.none,
-                              children: [
-                                Container(
-                                  width: MediaQuery.of(context).size.width / 8,
-                                  height: 50,
-                                  color: Colors
-                                      .transparent, // optional background placeholder
-                                ),
-                                Positioned(
-                                  top:
-                                      -48, // half of height to make it overlap nicely
-                                  child: Container(
-                                    width: 75,
-                                    height: 75,
-                                    decoration: const BoxDecoration(
-                                      color: Colors.white,
-                                      shape: BoxShape.circle,
+                          ),
+                          height: kToolbarHeight + 5,
+                          child: Row(
+                            mainAxisAlignment: MainAxisAlignment.spaceAround,
+                            children: [
+                              _buildNavItem(
+                                  icon: Icons.home_outlined,
+                                  index: 0,
+                                  label: "Home"),
+                              _buildNavItem(
+                                icon: Icons.message_outlined,
+                                index: 1,
+                                label: "Chat",
+                              ),
+                              Stack(
+                                alignment: Alignment.topCenter,
+                                clipBehavior: Clip.none,
+                                children: [
+                                  Container(
+                                    width:
+                                        MediaQuery.of(context).size.width / 8,
+                                    height: 50,
+                                    color: Colors
+                                        .transparent, // optional background placeholder
+                                  ),
+                                  Positioned(
+                                    top:
+                                        -48, // half of height to make it overlap nicely
+                                    child: Container(
+                                      width: 75,
+                                      height: 75,
+                                      decoration: const BoxDecoration(
+                                        color: Colors.white,
+                                        shape: BoxShape.circle,
+                                      ),
                                     ),
                                   ),
-                                ),
-                              ],
-                            ),
-                            _buildNavItem(
-                                icon: Icons.history_rounded,
-                                index: 2,
-                                label: "History"),
-                            _buildNavItem(
-                                icon: Icons.recycling_outlined,
-                                index: 3,
-                                label: "Refill"),
-                          ],
-                        )),
+                                ],
+                              ),
+                              _buildNavItem(
+                                  icon: Icons.history_rounded,
+                                  index: 2,
+                                  label: "History"),
+                              _buildNavItem(
+                                  icon: Icons.recycling_outlined,
+                                  index: 3,
+                                  label: "Refill"),
+                            ],
+                          )),
+                    ),
                   ),
                 ),
-              ),
-            )
-          : null,
-      body: Stack(
-        // Wrap body in Stack
-        children: [
-          _pages[_selectedIndex],
+              )
+            : null,
+        body: Stack(
+          // Wrap body in Stack
+          children: [
+            _pages[_selectedIndex],
 
-          // Voice Chat Overlay
-          if (_showVoiceOverlay)
-            VoiceChatOverlay(
-              onClose: _closeVoiceOverlay,
-            ),
-        ],
+            // Voice Chat Overlay
+            if (_showVoiceOverlay)
+              VoiceChatOverlay(
+                onClose: _closeVoiceOverlay,
+              ),
+          ],
+        ),
       ),
     );
   }
@@ -475,11 +625,11 @@ class _BottomnavbarState extends State<Bottomnavbar>
       builder: (context, box, widget) {
         String username = 'Guest User';
 
-        // Get updated username from Hive
         final user = box.get('user');
         if (user != null) {
           username = user.username;
         }
+
         return Drawer(
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -512,32 +662,22 @@ class _BottomnavbarState extends State<Bottomnavbar>
                   ],
                 ),
               ),
-              // Drawer options above Logout
               Expanded(
                 child: ListView(
                   padding: EdgeInsets.zero,
                   children: [
-                    // Push Notifications (default color)
+                    // Notification Sound
                     ListTile(
-                      leading: const Icon(
-                        Icons.notifications_active_outlined,
-                        color: Color.fromARGB(255, 255, 153, 0),
-                      ),
-                      title: const Text("Push Notifications"),
-                      trailing: Switch(
-                        trackColor: MaterialStateProperty.all(
-                          const Color.fromARGB(255, 255, 202, 159),
-                        ),
-                        activeColor: Colors.green[700],
-                        value: isNotificationEnabled,
-                        onChanged: (value) {
-                          setState(() {
-                            isNotificationEnabled = value;
-                          });
-                        },
-                      ),
+                      leading: const Icon(Icons.notifications_active,
+                          color: Colors.orange),
+                      title: const Text("Sound and Vibration"),
+                      subtitle: Text(_selectedSound ?? "Default"),
+                      onTap: _chooseSound,
                     ),
-                    // Profile (green outline, icon, and text)
+                    // Vibration
+
+                    const Divider(),
+                    // Profile
                     Padding(
                       padding: const EdgeInsets.symmetric(
                           vertical: 6.0, horizontal: 8),
@@ -562,7 +702,7 @@ class _BottomnavbarState extends State<Bottomnavbar>
                         ),
                       ),
                     ),
-                    // Health Reports (red outline, icon, and text)
+                    // Health Reports
                     Padding(
                       padding: const EdgeInsets.symmetric(
                           vertical: 6.0, horizontal: 8),
@@ -582,8 +722,7 @@ class _BottomnavbarState extends State<Bottomnavbar>
                             Navigator.push(
                               context,
                               MaterialPageRoute(
-                                builder: (context) =>
-                                    Reportspage(), // Replace with HealthReportsPage()
+                                builder: (context) => Reportspage(),
                               ),
                             );
                           },
@@ -593,7 +732,7 @@ class _BottomnavbarState extends State<Bottomnavbar>
                   ],
                 ),
               ),
-              // Logout at bottom
+              // Logout
               Padding(
                 padding:
                     const EdgeInsets.symmetric(vertical: 16.0, horizontal: 8),
@@ -651,8 +790,9 @@ class _BottomnavbarState extends State<Bottomnavbar>
                                     .clear();
                                 await Hive.box<HistoryEntry>('historyBox')
                                     .clear();
-                                Hive.box<ChatMessage>('chatMessages')
-                                    .clear(); // Fixed box name
+                                await Hive.box<ChatMessage>('chatMessages')
+                                    .clear();
+                                await Hive.box<AlarmModel>('alarms').clear();
                                 await Hive.box('session').clear();
 
                                 Navigator.pushReplacement(

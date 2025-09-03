@@ -1,45 +1,63 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:hive/hive.dart';
-import '../../Hivemodel/alarm_model.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
+
 import '../../Hivemodel/medicine.dart';
 import '../../Hivemodel/user_settings.dart';
-import '../../reminder/services/alarm_service.dart';
+import '../../chatmanager/ai_chat/extractedmedicine.dart';
+import '../../chatmanager/ai_chat/extractedmedicine_storage.dart';
 import '../../services/hive_services.dart';
 import '../../utils/customsnackbar.dart';
 import '../../utils/date_utils.dart';
-import 'package:supabase_flutter/supabase_flutter.dart';
 
-class AddMedicinePage extends StatefulWidget {
-  const AddMedicinePage({super.key});
+class MedAddPage extends StatefulWidget {
+  const MedAddPage({super.key, required this.medicine});
+  final ExtractedMedicine medicine;
 
   @override
-  State<AddMedicinePage> createState() => _AddMedicinePageState();
+  State<MedAddPage> createState() => _MedAddPageState();
 }
 
-class _AddMedicinePageState extends State<AddMedicinePage> {
+class _MedAddPageState extends State<MedAddPage> {
   final _formKey = GlobalKey<FormState>();
-  final _nameController = TextEditingController();
-  final _dosageController = TextEditingController();
-  final _quantityController = TextEditingController();
-  final _thresholdController = TextEditingController();
-  final _instructionsController = TextEditingController();
+  late TextEditingController _nameController;
+  late TextEditingController _dosageController;
+  late TextEditingController _quantityController;
+  late TextEditingController _thresholdController;
+  late TextEditingController _instructionsController;
+  int? _timesPerDay;
+
+  @override
+  void initState() {
+    super.initState();
+
+    // Prefill values from ExtractedMedicine
+    _nameController = TextEditingController(text: widget.medicine.name);
+    _dosageController =
+        TextEditingController(text: widget.medicine.dosage.toString());
+    _quantityController = TextEditingController();
+    _thresholdController = TextEditingController();
+    _instructionsController =
+        TextEditingController(text: widget.medicine.instructions);
+
+    // Prefill dose times from medicine
+    if (widget.medicine.dailyIntakeTimes.isNotEmpty) {
+      _timesPerDay = widget.medicine.dailyIntakeTimes
+          .length; // use the field, not a new variable
+      print("count" + _timesPerDay.toString());
+      for (int i = 0; i < _timesPerDay!; i++) {
+        final parts = widget.medicine.dailyIntakeTimes[i].split(':');
+        final hour = int.tryParse(parts[0]) ?? 0;
+        final minute = int.tryParse(parts[1]) ?? 0;
+        _doseTimes[i] = TimeOfDay(hour: hour, minute: minute);
+      }
+    }
+  }
+
   bool _isloading = false;
   DateTime? _selectedDate;
-  int? _timesPerDay;
   List<TimeOfDay?> _doseTimes = [null, null, null, null];
-  bool _enableReminder = true; // toggle reminder on/off
-  bool _isRepeating = true; // repeat daily
-  List<bool> _selectedDays = List.filled(7, true);
-  final List<String> _dayNames = [
-    'Mon',
-    'Tue',
-    'Wed',
-    'Thu',
-    'Fri',
-    'Sat',
-    'Sun'
-  ];
 
   String? _intValidator(String? value, String fieldName) {
     if (value == null || value.trim().isEmpty) return 'Enter $fieldName';
@@ -63,6 +81,16 @@ class _AddMedicinePageState extends State<AddMedicinePage> {
       initialTime: _doseTimes[index] ?? TimeOfDay.now(),
     );
     if (picked != null) setState(() => _doseTimes[index] = picked);
+  }
+
+  void _removeSavedExtractedMedicine(ExtractedMedicine med) {
+    final currentMeds = ExtractedMedicineStorage.getExtractedMedicines();
+    currentMeds.removeWhere((m) =>
+        m.name.toLowerCase() == med.name.toLowerCase() &&
+        m.dosage == med.dosage);
+    // Update the storage
+    ExtractedMedicineStorage.setExtractedMedicines(currentMeds);
+    debugPrint("Removed saved ExtractedMedicine: ${med.name}");
   }
 
   Future<void> _saveMedicine() async {
@@ -155,25 +183,6 @@ class _AddMedicinePageState extends State<AddMedicinePage> {
       // 4️⃣ Save to Hive first
       await medicineBox.add(medicine);
 
-      if (_enableReminder) {
-        for (int i = 0; i < _timesPerDay!; i++) {
-          final doseTime = _doseTimes[i]!;
-          final alarm = AlarmModel(
-            id: DateTime.now().millisecondsSinceEpoch.remainder(100000),
-            medicineName: medicine.name,
-            dosage: medicine.dosage,
-            title: medicine.name,
-            description: "Time to take the medicine - ${medicine.instructions}",
-            hour: doseTime.hour,
-            minute: doseTime.minute,
-            isRepeating: _isRepeating,
-            selectedDays: List.from(_selectedDays),
-          );
-          await AlarmService.saveAlarm(alarm); // schedules notification
-         
-        }
-      }
-
       // 6️⃣ (Optional) Schedule notifications
       for (final timeStr in medicine.dailyIntakeTimes) {
         final parts = timeStr.split(':');
@@ -200,7 +209,7 @@ class _AddMedicinePageState extends State<AddMedicinePage> {
 
         // TODO: Schedule notification here
       }
-
+      _removeSavedExtractedMedicine(widget.medicine);
       // 7️⃣ Show success
       setState(() => _isloading = false);
       showDialog(
@@ -374,35 +383,6 @@ class _AddMedicinePageState extends State<AddMedicinePage> {
                 ),
                 keyboardType: TextInputType.text,
               ),
-              SwitchListTile(
-  title: const Text('Enable Reminder'),
-  value: _enableReminder,
-  onChanged: (v) => setState(() => _enableReminder = v),
-),
-
-if (_enableReminder) ...[
-  SwitchListTile(
-    title: const Text('Repeat Daily'),
-    value: _isRepeating,
-    onChanged: (v) => setState(() => _isRepeating = v),
-  ),
-  if (_isRepeating) ...[
-    const Text('Repeat on:', style: TextStyle(fontWeight: FontWeight.bold)),
-    const SizedBox(height: 8),
-    Wrap(
-      spacing: 8,
-      children: List.generate(7, (i) {
-        return FilterChip(
-          label: Text(_dayNames[i]),
-          selected: _selectedDays[i],
-          onSelected: (s) => setState(() => _selectedDays[i] = s),
-          selectedColor: Colors.green.shade200,
-        );
-      }),
-    ),
-  ],
-],
-
               const SizedBox(height: 16),
               const SizedBox(height: 32),
               ElevatedButton(
