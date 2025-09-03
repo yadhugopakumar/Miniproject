@@ -34,7 +34,16 @@ class ChatService {
     try {
       String currentChildId = _sessionBox.get('childId', defaultValue: '');
       String query = userInput.toLowerCase().trim();
-
+      // ADD THIS GREETING CHECK FIRST (before all other checks)
+      if (query == 'hi' ||
+          query == 'hello' ||
+          query == 'hey' ||
+          query.startsWith('hi ') ||
+          query.startsWith('hello ') ||
+          query.contains('how are you') ||
+          query.contains('good morning')) {
+        return "Hello! 👋 I'm your personal health assistant. I can help you manage your medicines, track your health reports, and provide general health information. How can I assist you today?";
+      }
       // Medicine Management Queries
       if (_isMedicineQuery(query)) {
         return await _handleMedicineQuery(query, currentChildId);
@@ -101,8 +110,8 @@ class ChatService {
       'my name',
       'who am i',
       'my profile',
-      'about me'
-          'hi',
+      'about me',
+      'hi',
       'hello',
       'hey',
       'greetings',
@@ -111,7 +120,14 @@ class ChatService {
       'good afternoon',
       'good evening'
     ];
-    return userKeywords.any((keyword) => query.contains(keyword));
+
+    // Check for exact matches or word boundaries to avoid false positives
+    return userKeywords.any((keyword) {
+      return query == keyword ||
+          query.startsWith(keyword + ' ') ||
+          query.contains(' ' + keyword + ' ') ||
+          query.endsWith(' ' + keyword);
+    });
   }
 
   bool _isSymptomQuery(String query) {
@@ -131,8 +147,30 @@ class ChatService {
       'breathing',
       'heart',
       'stomach',
-      'back pain'
+      'back pain',
+      'hurt',
+      'ache',
+      'sick',
+      'unwell',
+      'symptoms',
+      'feel bad',
+      'blood pressure high',
+      'bp high',
+      'sugar high',
+      'diabetes',
+      'throat',
+      'nose',
+      'ear',
+      'eye',
+      'rash',
+      'itching',
+      'vomit',
+      'diarrhea',
+      'constipation',
+      'sleep',
+      'insomnia'
     ];
+
     return symptomKeywords.any((keyword) => query.contains(keyword));
   }
 
@@ -175,23 +213,25 @@ class ChatService {
     try {
       final normalized = query.toLowerCase().trim();
 
-      // Greeting detection
-      const greetings = [
-        'hi',
-        'hello',
-        'hey',
-        'greetings',
-        'how are you',
-        'good morning',
-        'good afternoon',
-        'good evening',
-      ];
-
-      if (greetings.any((g) => normalized.contains(g))) {
+      // Simple greeting check
+      if (normalized == 'hi' ||
+          normalized == 'hello' ||
+          normalized == 'hey' ||
+          normalized.startsWith('hi ') ||
+          normalized.startsWith('hello ') ||
+          normalized.startsWith('hey ')) {
         return "Hello! 👋 I'm your personal health assistant. I can help you manage your medicines, track your health reports, and provide general health information. How can I assist you today?";
       }
 
-      // Fetch user info
+      // Other greeting patterns
+      if (normalized.contains('how are you') ||
+          normalized.contains('good morning') ||
+          normalized.contains('good afternoon') ||
+          normalized.contains('good evening')) {
+        return "Hello! 👋 I'm your personal health assistant. I can help you manage your medicines, track your health reports, and provide general health information. How can I assist you today?";
+      }
+
+      // Rest of your existing logic...
       final user = _userBox.values.firstWhere(
         (u) => u.childId == childId,
         orElse: () => throw Exception('User not found'),
@@ -212,14 +252,18 @@ class ChatService {
   }
 
   Future<String> _handleSymptomQuery(String userInput, String childId) async {
-    // Get user's health context - Fixed to use correct field names
-    var userMedicines =
-        _medicineBox.values.map((m) => "${m.name} ${m.dosage}").toList();
+    try {
+      // Get user's health context with null safety
+      var userMedicines = _medicineBox.values // Add this filter
+          .map((m) => "${m.name} ${m.dosage}")
+          .toList();
 
-    var healthReports = _reportBox.values.toList();
+      var healthReports = _reportBox.values
+          .where((r) => r.childId == childId) // Add this filter
+          .toList();
 
-    // Build safe, context-aware prompt
-    String prompt = '''
+      // Build safe, context-aware prompt
+      String prompt = '''
 You are a careful medical AI assistant for elderly patients. Provide only safe, general guidance.
 
 Patient Context:
@@ -236,20 +280,47 @@ Guidelines:
 4. Be empathetic and reassuring
 5. Keep response to 3-4 sentences maximum
 6. Never provide diagnosis or specific medical recommendations
+7. If symptoms seem serious, emphasize urgent medical attention
 
 Respond safely:
 ''';
 
-    try {
       String response = await _aiProvider.generateContent(prompt);
+
+      // Add emergency warning for serious symptoms
+      if (_hasSeriousSymptoms(userInput)) {
+        return "🚨 $response\n\n⚠️ **IMPORTANT**: These symptoms may need immediate medical attention. Please contact your doctor or emergency services if symptoms are severe.";
+      }
+
       return response +
           "\n\n⚠️ Please consult your doctor for proper medical evaluation.";
     } catch (e) {
-      return "I understand you're concerned about your symptoms. Given your current medications and health profile, I'd recommend contacting your healthcare provider for proper guidance.";
+      print('Symptom query error: $e');
+      return "I understand you're concerned about your symptoms. Given your current medications and health profile, I'd recommend contacting your healthcare provider for proper guidance.\n\n⚠️ Please consult your doctor for proper medical evaluation.";
     }
   }
 
-  // Data retrieval methods - Fixed to use correct field names
+// Add this helper method for serious symptom detection
+  bool _hasSeriousSymptoms(String input) {
+    List<String> seriousSymptoms = [
+      'chest pain',
+      'shortness of breath',
+      'difficulty breathing',
+      'severe pain',
+      'blood',
+      'unconscious',
+      'fainting',
+      'heart attack',
+      'stroke',
+      'emergency',
+      'can\'t breathe'
+    ];
+
+    String normalized = input.toLowerCase();
+    return seriousSymptoms.any((symptom) => normalized.contains(symptom));
+  }
+
+  // Data retrieval methods
   String _getTodayMedicines(String childId) {
     var todayMedicines = _medicineBox.values.toList();
 

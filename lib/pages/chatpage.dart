@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:loading_animation_widget/loading_animation_widget.dart';
 import 'package:image_picker/image_picker.dart';
+import 'package:medremind/pages/screens/chat_med_add.dart';
 import 'package:permission_handler/permission_handler.dart';
 import 'package:flutter_tts/flutter_tts.dart';
 import 'package:hive_flutter/hive_flutter.dart';
@@ -10,6 +11,8 @@ import 'dart:io';
 import '../Hivemodel/chat_message.dart';
 import '../chatmanager/ai_chat/chat_service.dart';
 import '../chatmanager/ai_chat/chat_storage_service.dart';
+import '../chatmanager/ai_chat/extractedmedicine.dart';
+import '../chatmanager/ai_chat/extractedmedicine_storage.dart';
 import '../chatmanager/ai_chat/gemini_provider.dart';
 import '../bottomnavbar.dart';
 
@@ -33,7 +36,7 @@ class _ChatpageState extends State<Chatpage> with TickerProviderStateMixin {
   late FlutterTts flutterTts;
   bool isSpeaking = false;
   String currentSpeakingMessageId = '';
-
+  late AnimationController _dotsController;
   // Auto-scroll related variables
   bool _shouldAutoScroll = true;
   bool _showScrollButton = false;
@@ -44,13 +47,19 @@ class _ChatpageState extends State<Chatpage> with TickerProviderStateMixin {
     apiKey = dotenv.env['API_KEY'] ?? "";
     provider = GeminiProvider(apiKey: apiKey);
     _initTts();
+
     // _loadInitialMessages();
     _setupScrollListener();
-
+    _showWelcomeMessage = true;
     // Call scroll after a delay to ensure everything is built
     Future.delayed(const Duration(milliseconds: 500), () {
       _scrollToBottomAfterBuild();
     });
+
+    _dotsController = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 2000),
+    )..repeat(); // keeps looping
   }
 
   void _hideWelcomeMessage() {
@@ -83,7 +92,7 @@ class _ChatpageState extends State<Chatpage> with TickerProviderStateMixin {
       Future.delayed(const Duration(milliseconds: 100), () {
         if (_scrollController.hasClients && mounted) {
           final double maxExtent =
-              _scrollController.position.maxScrollExtent ;
+              _scrollController.position.maxScrollExtent + 100;
           _scrollController.jumpTo(maxExtent);
           print("Scrolled to: $maxExtent"); // Debug print
         }
@@ -119,7 +128,7 @@ class _ChatpageState extends State<Chatpage> with TickerProviderStateMixin {
         Future.delayed(const Duration(milliseconds: 100), () {
           if (_scrollController.hasClients && mounted) {
             _scrollController
-                .jumpTo(_scrollController.position.maxScrollExtent );
+                .jumpTo(_scrollController.position.maxScrollExtent);
             _isFirstLoad = false;
             _shouldAutoScroll = true;
           }
@@ -189,8 +198,10 @@ class _ChatpageState extends State<Chatpage> with TickerProviderStateMixin {
         .replaceAll(RegExp(r'[📄📊💊🩺]'), '');
   }
 
+
   Future<void> _processImage(File imageFile, String analysisType) async {
     _shouldAutoScroll = true;
+    _hideWelcomeMessage();
 
     final userMessage = ChatMessage(
       role: 'user',
@@ -221,11 +232,38 @@ class _ChatpageState extends State<Chatpage> with TickerProviderStateMixin {
 
     try {
       String response;
-      if (analysisType == 'prescription') {
-        response = await provider.analyzePrescriptionImage(imageFile);
-      } else {
-        response = await provider.analyzeHealthReportWithImage(imageFile, null);
-      }
+
+if (analysisType == 'prescription') {
+  // Get structured data for prescription analysis
+  Map<String, dynamic> analysisResult =
+      await provider.analyzePrescriptionWithStructuredData(imageFile);
+
+  // Extract medicines and store in session storage
+  if (analysisResult['medicines'] != null) {
+    List<ExtractedMedicine> medicines =
+        (analysisResult['medicines'] as List)
+            .map((m) => ExtractedMedicine(
+                  name: m['name']?.toString() ?? '',
+                  dosage: m['dosage']?.toString() ?? '',
+                  duration: m['duration']?.toString() ?? '',
+                  instructions: m['instructions']?.toString() ?? '',
+                  dailyIntakeTimes: m['dailyIntakeTimes'] != null
+                      ? List<String>.from(m['dailyIntakeTimes'])
+                      : [], // ✅ FIXED
+                ))
+            .toList();
+
+    // ✅ Store extracted medicines
+    ExtractedMedicineStorage.setExtractedMedicines(medicines);
+  }
+
+  // Use the structured response
+  response = analysisResult['response'] ??
+      'Prescription analyzed successfully.';
+} else {
+  // Health report analysis (no structured data needed)
+  response = await provider.analyzeHealthReportWithImage(imageFile, null);
+}
 
       final botMessage = ChatMessage(
         role: 'bot',
@@ -250,6 +288,8 @@ class _ChatpageState extends State<Chatpage> with TickerProviderStateMixin {
         }
       });
     } catch (e) {
+      print('Image processing error: $e');
+
       final errorMessage = ChatMessage(
         role: 'bot',
         content: "Sorry, I couldn't analyze the image. Please try again.",
@@ -289,11 +329,8 @@ class _ChatpageState extends State<Chatpage> with TickerProviderStateMixin {
 
     await ChatStorageService.addMessage(userMessage);
     controller.clear();
-    setState(() {
-      isThinking = true;
-    });
 
-    // Smooth scroll after user message with animation
+    // Smooth scroll after user message
     _scrollToBottom(force: true, animate: true, extraOffset: 100);
 
     // Animate user message appearance
@@ -306,8 +343,22 @@ class _ChatpageState extends State<Chatpage> with TickerProviderStateMixin {
       }
     });
 
+    // Set thinking state AFTER user message is added
+    setState(() {
+      isThinking = true; // show thinking bubble
+    });
+
+    // Keep the thinking bubble visible at least 2s
+    final thinkingMinDuration = Future.delayed(const Duration(seconds: 2));
+
     try {
-      final response = await _chatService.getPersonalizedResponse(text);
+      // Request and min-delay run in parallel
+      final results = await Future.wait([
+        _chatService.getPersonalizedResponse(text),
+        thinkingMinDuration,
+      ]);
+
+      final response = results[0] as String;
 
       final botMessage = ChatMessage(
         role: 'bot',
@@ -319,13 +370,13 @@ class _ChatpageState extends State<Chatpage> with TickerProviderStateMixin {
       await ChatStorageService.addMessage(botMessage);
 
       setState(() {
-        isThinking = false;
+        isThinking = false; // hide thinking bubble
       });
 
       // Smooth scroll after bot message
       _scrollToBottom(force: true, animate: true, extraOffset: 80);
 
-      // Animate bot message appearance (typewriter effect)
+      // Animate bot message appearance
       Future.delayed(const Duration(milliseconds: 500), () async {
         final messages = ChatStorageService.getAllMessages();
         if (messages.isNotEmpty) {
@@ -461,186 +512,65 @@ class _ChatpageState extends State<Chatpage> with TickerProviderStateMixin {
     );
   }
 
-//  Widget _buildThinkingIndicator() {
-//     return Container(
-//       margin: const EdgeInsets.only(bottom: 16),
-//       child: Row(
-//         children: [
-//           Container(
-//             width: 40,
-//             height: 40,
-//             decoration: BoxDecoration(
-//               gradient: const LinearGradient(
-//                 colors: [Color(0xFF64B5F6), Color(0xFF2196F3)],
-//               ),
-//               borderRadius: BorderRadius.circular(20),
-//             ),
-//             child: const Icon(
-//               Icons.psychology,
-//               color: Colors.white,
-//               size: 20,
-//             ),
-//           ),
-//           const SizedBox(width: 12),
-//           Container(
-//             padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-//             decoration: BoxDecoration(
-//               color: Colors.white,
-//               borderRadius: BorderRadius.circular(20),
-//               boxShadow: [
-//                 BoxShadow(
-//                   color: Colors.black.withOpacity(0.1),
-//                   blurRadius: 8,
-//                   offset: const Offset(0, 2),
-//                 ),
-//               ],
-//             ),
-//             child: Row(
-//               mainAxisSize: MainAxisSize.min,
-//               children: [
-//                 LoadingAnimationWidget.staggeredDotsWave(
-//                   color: const Color(0xFF2196F3),
-//                   size: 20,
-//                 ),
-//                 const SizedBox(width: 8),
-//                 const Text(
-//                   "Analyzing...",
-//                   style: TextStyle(
-//                     color: Color(0xFF2196F3),
-//                     fontSize: 14,
-//                     fontWeight: FontWeight.w500,
-//                   ),
-//                 ),
-//               ],
-//             ),
-//           ),
-//         ],
-//       ),
-//     );
-//   }
-Widget _buildThinkingIndicator() {
-  if (!isThinking) return const SizedBox.shrink();
-  
-  return Container(
-    margin: const EdgeInsets.only(bottom: 16),
-    padding: const EdgeInsets.all(20),
-    color: Colors.red, // Should be clearly visible
-    child: const Text(
-      "THINKING ANIMATION TEST",
-      style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
-    ),
-  );
-}
-
-//   Widget _buildThinkingIndicator() {
-//     return AnimatedSwitcher(
-//       duration: const Duration(milliseconds: 400),
-//       child: isThinking
-//           ? Container(
-//               key: const ValueKey('thinking'),
-//               margin: const EdgeInsets.only(bottom: 16),
-//               child: Row(
-//                 children: [
-//                   // Continuously Pulsing Avatar
-//                   TweenAnimationBuilder<double>(
-//                     tween: Tween(begin: 0.8, end: 1.2),
-//                     duration: const Duration(milliseconds: 1000),
-//                     builder: (context, scale, child) {
-//                       return TweenAnimationBuilder<double>(
-//                         tween: Tween(begin: 1.2, end: 0.8),
-//                         duration: const Duration(milliseconds: 1000),
-//                         builder: (context, reverseScale, child) {
-//                           return Transform.scale(
-//                             scale: scale,
-//                             child: Container(
-//                               width: 40,
-//                               height: 40,
-//                               decoration: BoxDecoration(
-//                                 gradient: const LinearGradient(
-//                                   colors: [
-//                                     Color(0xFF64B5F6),
-//                                     Color(0xFF2196F3)
-//                                   ],
-//                                 ),
-//                                 borderRadius: BorderRadius.circular(20),
-//                                 boxShadow: [
-//                                   BoxShadow(
-//                                     color: const Color(0xFF2196F3)
-//                                         .withOpacity(0.4),
-//                                     blurRadius: 8 * scale,
-//                                     spreadRadius: 2 * scale,
-//                                   ),
-//                                 ],
-//                               ),
-//                               child: const Icon(
-//                                 Icons.psychology,
-//                                 color: Colors.white,
-//                                 size: 20,
-//                               ),
-//                             ),
-//                           );
-//                         },
-//                         onEnd: () {
-//                           // This will restart the animation
-//                           if (mounted && isThinking) {
-//                             setState(() {});
-//                           }
-//                         },
-//                       );
-//                     },
-//                     onEnd: () {
-//                       // This will restart the animation
-//                       if (mounted && isThinking) {
-//                         setState(() {});
-//                       }
-//                     },
-//                   ),
-//                   const SizedBox(width: 12),
-//                   // Message Bubble
-//                   Container(
-//                     padding: const EdgeInsets.symmetric(
-//                         horizontal: 16, vertical: 12),
-//                     decoration: BoxDecoration(
-//                       color: Colors.white,
-//                       borderRadius: BorderRadius.circular(20),
-//                       boxShadow: [
-//                         BoxShadow(
-//                           color: Colors.black.withOpacity(0.1),
-//                           blurRadius: 8,
-//                           offset: const Offset(0, 2),
-//                         ),
-//                       ],
-//                     ),
-//                     child: Row(
-//                       mainAxisSize: MainAxisSize.min,
-//                       children: [
-//                         LoadingAnimationWidget.staggeredDotsWave(
-//                           color: const Color(0xFF2196F3),
-//                           size: 20,
-//                         ),
-//                         const SizedBox(width: 8),
-//                         const Text(
-//                           "Analyzing...",
-//                           style: TextStyle(
-//                             color: Color(0xFF2196F3),
-//                             fontSize: 14,
-//                             fontWeight: FontWeight.w500,
-//                           ),
-//                         ),
-//                       ],
-//                     ),
-//                   ),
-//                 ],
-//               ),
-//             )
-//           : const SizedBox.shrink(key: ValueKey('empty')),
-//     );
-//   }
+  Widget _buildThinkingIndicator() {
+    return Container(
+      margin: const EdgeInsets.only(bottom: 16, left: 8, right: 8),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Container(
+            width: 40,
+            height: 40,
+            decoration: BoxDecoration(
+              gradient: const LinearGradient(
+                colors: [Color(0xFF64B5F6), Color(0xFF2196F3)],
+              ),
+              borderRadius: BorderRadius.circular(20),
+            ),
+            child: const Icon(Icons.psychology, color: Colors.white, size: 20),
+          ),
+          const SizedBox(width: 12),
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(20),
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black.withOpacity(0.1),
+                  blurRadius: 8,
+                  offset: const Offset(0, 2),
+                ),
+              ],
+            ),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                LoadingAnimationWidget.staggeredDotsWave(
+                  color: const Color(0xFF2196F3),
+                  size: 20,
+                ),
+                const SizedBox(width: 8),
+                const Text(
+                  "Analyzing...",
+                  style: TextStyle(
+                    color: Color(0xFF2196F3),
+                    fontSize: 14,
+                    fontWeight: FontWeight.w500,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
 
   Widget _buildUserMessage(ChatMessage msg, bool isAnimating) {
     return AnimatedOpacity(
       opacity: 1.0, // Safe value
-      duration: const Duration(milliseconds: 300),
+      duration: const Duration(milliseconds: 500),
       child: Row(
         mainAxisAlignment: MainAxisAlignment.end,
         children: [
@@ -776,6 +706,9 @@ Widget _buildThinkingIndicator() {
                           ),
                   ),
                 ),
+                // Medicine buttons (if extracted medicines exist)
+                if (!isAnimating && _shouldShowMedicineButtons(msg))
+                  _buildMedicineButtons(),
                 if (!isAnimating) const SizedBox(height: 8),
                 if (!isAnimating)
                   GestureDetector(
@@ -817,6 +750,120 @@ Widget _buildThinkingIndicator() {
         ],
       ),
     );
+  }
+
+// Check if medicine buttons should be shown
+  bool _shouldShowMedicineButtons(ChatMessage msg) {
+    return msg.content.contains("prescription") &&
+        ExtractedMedicineStorage.hasExtractedMedicines();
+  }
+
+// Build medicine buttons widget
+  Widget _buildMedicineButtons() {
+    final medicines = ExtractedMedicineStorage.getExtractedMedicines();
+
+    if (medicines.isEmpty) return const SizedBox.shrink();
+
+    return Container(
+      margin: const EdgeInsets.only(top: 2),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+            decoration: BoxDecoration(
+              color: Colors.green[50],
+              borderRadius: BorderRadius.circular(8),
+              border: Border.all(color: Colors.green[200]!),
+            ),
+            child: const Row(
+              children: [
+                Icon(Icons.medical_services, color: Colors.green, size: 16),
+                SizedBox(width: 8),
+                Text(
+                  "Medicines found - Click to add:",
+                  style: TextStyle(
+                    fontSize: 13,
+                    fontWeight: FontWeight.w600,
+                    color: Colors.green,
+                  ),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 8),
+          ...medicines
+              .map((medicine) => Container(
+                    width: double.infinity,
+                    margin: const EdgeInsets.only(bottom: 2),
+                    child:InkWell(
+  onTap: () => _navigateToAddMedicine(medicine),
+  child: Container(
+    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+    decoration: BoxDecoration(
+      color: Color.fromARGB(255, 255, 254, 179),
+      borderRadius: BorderRadius.circular(8),
+      border: Border.all(color: Colors.green[300]!),
+    ),
+    child: Row(
+      crossAxisAlignment: CrossAxisAlignment.center, // center vertically
+      children: [
+        Icon(Icons.add_circle_outline, size: 18, color: Colors.green[800]),
+        const SizedBox(width: 8),
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Text(
+                medicine.name,
+                style: const TextStyle(
+                  fontSize: 14,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+              if (medicine.dosage.isNotEmpty ||
+                  medicine.instructions.isNotEmpty ||
+                  medicine.dailyIntakeTimes.isNotEmpty)
+                Text(
+                  "${medicine.dosage} • ${medicine.instructions} • at ${medicine.dailyIntakeTimes.join(", ")}",
+                  style: const TextStyle(fontSize: 12),
+                ),
+            ],
+          ),
+        ),
+      ],
+    ),
+  ),
+)
+
+                  ))
+              .toList(),
+        ],
+      ),
+    );
+  }
+
+// Navigate to add medicine page with prefilled data
+  void _navigateToAddMedicine(ExtractedMedicine medicine) {
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (context) => MedAddPage(
+          medicine: medicine,
+        ),
+      ),
+    ).then((result) {
+      if (result == true) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('${medicine.name} added successfully!'),
+            backgroundColor: Colors.green,
+            duration: const Duration(seconds: 2),
+          ),
+        );
+      }
+    });
   }
 
   @override
@@ -861,7 +908,7 @@ Widget _buildThinkingIndicator() {
                   valueListenable: ChatStorageService.getMessagesListenable(),
                   builder: (context, box, _) {
                     final messages = ChatStorageService.getAllMessages();
-// Call load initial messages here to ensure it runs after build
+                    // Call load initial messages here to ensure it runs after build
                     if (_isFirstLoad) {
                       _loadInitialMessages();
                     }
@@ -869,7 +916,7 @@ Widget _buildThinkingIndicator() {
                     final totalItems = messages.length +
                         (isThinking ? 1 : 0) +
                         (_showWelcomeMessage ? 1 : 0);
-// Schedule scroll to bottom after this build completes
+                    // Schedule scroll to bottom after this build completes
                     if (_showWelcomeMessage && messages.isEmpty) {
                       WidgetsBinding.instance.addPostFrameCallback((_) {
                         Future.delayed(const Duration(milliseconds: 100), () {
@@ -888,6 +935,7 @@ Widget _buildThinkingIndicator() {
                           top: 10,
                           bottom: 120), // Increased bottom padding
                       itemCount: totalItems,
+
                       itemBuilder: (context, index) {
                         // Show actual chat messages first
                         if (index < messages.length) {
@@ -904,7 +952,7 @@ Widget _buildThinkingIndicator() {
                           );
                         }
 
-                        // Show thinking indicator
+                        // Show thinking indicator AFTER all messages
                         if (isThinking && index == messages.length) {
                           return _buildThinkingIndicator();
                         }
@@ -992,7 +1040,7 @@ Widget _buildThinkingIndicator() {
     );
   }
 
-// Move this INSIDE your _ChatpageState class
+  // Move this INSIDE your _ChatpageState class
   Widget _buildWelcomeMessage() {
     return Container(
       margin: const EdgeInsets.only(top: 15, left: 10, right: 10, bottom: 200),
@@ -1039,7 +1087,7 @@ Widget _buildThinkingIndicator() {
                 borderRadius: BorderRadius.circular(12),
               ),
               child: const Text(
-                "Hello! 👋 Welcome to MedRemind AI Assistant!\n\nI'm here to help you with:\n\n💊 Medicine management: Today's doses, missed medications, refill alerts\n\n📊 Health reports: Blood pressure, cholesterol readings\n\n❓ Health questions: Symptoms, medicine information, general health tips\n\n👤 Personal assistance: Your profile and health history\n\nHow can I assist you today?",
+                "Hello! 👋 Welcome Back to MedRemind AI Assistant!\nI'm here to help you with:\n💊 Medicine management\n📊 Health reports\n❓ Health questions\n👤 Personal assistance\nHow can I assist you today?",
                 style: TextStyle(
                   fontSize: 15,
                   fontWeight: FontWeight.w500,
@@ -1056,6 +1104,7 @@ Widget _buildThinkingIndicator() {
   void dispose() {
     controller.dispose();
     _scrollController.dispose();
+    _dotsController.dispose();
     flutterTts.stop();
     super.dispose();
   }
