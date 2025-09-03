@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:hive/hive.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+import '../../Hivemodel/alarm_model.dart';
 import '../../Hivemodel/medicine.dart';
+import '../../reminder/services/alarm_service.dart';
 import '../../utils/customsnackbar.dart';
 
 class EditMedicinePage extends StatefulWidget {
@@ -25,6 +27,20 @@ class _EditMedicinePageState extends State<EditMedicinePage> {
   late TextEditingController _dosageController;
   late TextEditingController _stockController;
   late TextEditingController _thresholdController;
+  late TextEditingController _instructionsController;
+
+  bool _enableReminder = true; // toggle reminder on/off
+  bool _isRepeating = true; // repeat daily
+  List<bool> _selectedDays = List.filled(7, true);
+  final List<String> _dayNames = [
+    'Mon',
+    'Tue',
+    'Wed',
+    'Thu',
+    'Fri',
+    'Sat',
+    'Sun'
+  ];
 
   DateTime? _selectedDate;
   int? _timesPerDay;
@@ -32,21 +48,43 @@ class _EditMedicinePageState extends State<EditMedicinePage> {
   @override
   void initState() {
     super.initState();
+
+    // Prefill text fields
     _nameController = TextEditingController(text: widget.medicine.name);
     _dosageController = TextEditingController(text: widget.medicine.dosage);
     _stockController =
-        TextEditingController(text: widget.medicine.quantityLeft.toString());
+        TextEditingController(text: widget.medicine.totalQuantity.toString());
     _thresholdController =
         TextEditingController(text: widget.medicine.refillThreshold.toString());
+    _instructionsController =
+        TextEditingController(text: widget.medicine.instructions ?? "");
+
+    // Prefill expiry date
     _selectedDate = widget.medicine.expiryDate;
+
+    // Prefill times per day
     _timesPerDay = widget.medicine.dailyIntakeTimes.length;
+
+    // Convert stored intake times ("HH:mm") → TimeOfDay
     _doseTimes = widget.medicine.dailyIntakeTimes.map((t) {
       final parts = t.split(":");
       return TimeOfDay(hour: int.parse(parts[0]), minute: int.parse(parts[1]));
     }).toList();
 
-    //  Ensure _doseTimes has at least 4 slots
+    // Ensure exactly 4 slots for UI consistency
     _doseTimes = List<TimeOfDay?>.from(_doseTimes)..length = 4;
+
+    // Optional: load alarm details (if you want extra prefill from alarmsBox)
+    final alarmBox = Hive.box<AlarmModel>('alarms');
+    final relatedAlarms = alarmBox.values
+        .where((a) => a.medicineName == widget.medicine.name)
+        .toList();
+
+    if (relatedAlarms.isNotEmpty) {
+      _isRepeating = relatedAlarms.first.isRepeating;
+      _selectedDays = relatedAlarms.first.selectedDays;
+      _enableReminder = relatedAlarms.first.isActive;
+    }
   }
 
   Future<void> _pickTime(BuildContext context, int index) async {
@@ -95,126 +133,117 @@ class _EditMedicinePageState extends State<EditMedicinePage> {
     }
   }
 
-  
-  // void _saveChanges() async {
-  //   setState(() => _isediting = true);
+  void _saveChanges() async {
+    setState(() => _isediting = true);
 
-  //   bool allTimesSelected = _timesPerDay != null &&
-  //       List.generate(_timesPerDay!, (i) => _doseTimes[i])
-  //           .every((t) => t != null);
+    bool allTimesSelected = _timesPerDay != null &&
+        List.generate(_timesPerDay!, (i) => _doseTimes[i])
+            .every((t) => t != null);
 
-  //   if (_nameController.text.trim().isEmpty ||
-  //       _dosageController.text.trim().isEmpty ||
-  //       _stockController.text.trim().isEmpty ||
-  //       _thresholdController.text.trim().isEmpty ||
-  //       _selectedDate == null ||
-  //       _timesPerDay == null ||
-  //       !allTimesSelected) {
-  //     AppSnackbar.show(context,
-  //         message: "Please fill all fields", success: false);
-  //     setState(() => _isediting = false);
-  //     return;
-  //   }
+    if (_nameController.text.trim().isEmpty ||
+        _dosageController.text.trim().isEmpty ||
+        _stockController.text.trim().isEmpty ||
+        _thresholdController.text.trim().isEmpty ||
+        _selectedDate == null ||
+        _timesPerDay == null ||
+        !allTimesSelected) {
+      AppSnackbar.show(context,
+          message: "Please fill all fields", success: false);
+      setState(() => _isediting = false);
+      return;
+    }
 
-  //   try {
-  //     final box = Hive.box<Medicine>('medicinesBox');
+    try {
+      final box = Hive.box<Medicine>('medicinesBox');
 
-  //     // Only keep the times user selected
-  //     final doseTimes = _doseTimes
-  //         .take(_timesPerDay!)
-  //         .map((t) =>
-  //             "${t!.hour.toString().padLeft(2, '0')}:${t.minute.toString().padLeft(2, '0')}")
-  //         .toList();
-  //     print(widget.medicineKey);
-  //     final updatedMedicine = Medicine(
-  //       id: widget.medicineKey, // Keep the original ID
-  //       name: _nameController.text.trim(),
-  //       dosage: _dosageController.text.trim(),
-  //       expiryDate: _selectedDate!,
-  //       dailyIntakeTimes: doseTimes,
-  //       quantityLeft: widget.medicine.quantityLeft, // preserve left
-  //       totalQuantity: int.parse(_stockController.text.trim()),
-  //       refillThreshold: int.parse(_thresholdController.text.trim()),
-  //     );
+      // Format new times
+      final doseTimes = _doseTimes
+          .take(_timesPerDay!)
+          .map((t) =>
+              "${t!.hour.toString().padLeft(2, '0')}:${t.minute.toString().padLeft(2, '0')}")
+          .toList();
 
-  //     // ✅ Overwrite using the correct Hive key
-      
-  //     await box.put(updatedMedicine.id, updatedMedicine);
+      // Updated medicine
+      final updatedMedicine = Medicine(
+        id: widget.medicine.id,
+        name: _nameController.text.trim(),
+        dosage: _dosageController.text.trim(),
+        expiryDate: _selectedDate!,
+        dailyIntakeTimes: doseTimes,
+        quantityLeft: int.parse(_stockController.text.trim()),
+        totalQuantity: int.parse(_stockController.text.trim()),
+        refillThreshold: int.parse(_thresholdController.text.trim()),
+        instructions: _instructionsController.text.trim(),
+      );
 
-  //     // ✅ Update Supabase
-  //     await Supabase.instance.client.from('medicine').update({
-  //       'name': updatedMedicine.name,
-  //       'dosage': updatedMedicine.dosage,
-  //       'expiry_date': updatedMedicine.expiryDate.toIso8601String(),
-  //       'daily_intake_times': updatedMedicine.dailyIntakeTimes,
-  //       'total_quantity': updatedMedicine.totalQuantity,
-  //       'refill_threshold': updatedMedicine.refillThreshold,
-  //     }).eq('id', widget.medicineKey);
+      await box.put(widget.medicineKey, updatedMedicine);
 
-  //     AppSnackbar.show(context, message: "Medicine Updated", success: true);
-  //     Navigator.pop(context);
-  //   } catch (e) {
-  //     AppSnackbar.show(context, message: "Failed to Update", success: false);
-  //   } finally {
-  //     setState(() => _isediting = false);
-  //   }
-  // }
-void _saveChanges() async {
-  setState(() => _isediting = true);
-  bool allTimesSelected = _timesPerDay != null &&
-      List.generate(_timesPerDay!, (i) => _doseTimes[i]).every((t) => t != null);
-  
-  if (_nameController.text.trim().isEmpty ||
-      _dosageController.text.trim().isEmpty ||
-      _stockController.text.trim().isEmpty ||
-      _thresholdController.text.trim().isEmpty ||
-      _selectedDate == null ||
-      _timesPerDay == null ||
-      !allTimesSelected) {
-    AppSnackbar.show(context, message: "Please fill all fields", success: false);
-    setState(() => _isediting = false);
-    return;
+      // ✅ Update alarms
+      final alarmBox = Hive.box<AlarmModel>('alarms');
+
+      // Remove old alarms for this medicine
+      final oldAlarms = alarmBox.values
+          .where((alarm) => alarm.medicineName == widget.medicine.name)
+          .toList();
+
+// Remove old alarms
+      for (var alarm in oldAlarms) {
+        await AlarmService.deleteAlarm(alarm.id);
+        await alarmBox.delete(alarm.id);
+      }
+
+// Add new alarms
+      for (var i = 0; i < doseTimes.length; i++) {
+        final parts = doseTimes[i].split(":");
+        final hour = int.parse(parts[0]);
+        final minute = int.parse(parts[1]);
+
+        int alarmId;
+        if (i < oldAlarms.length) {
+          alarmId = oldAlarms[i].id; // reuse existing
+        } else {
+          alarmId = DateTime.now().millisecondsSinceEpoch.remainder(100000);
+        }
+
+        final newAlarm = AlarmModel(
+          id: alarmId,
+          medicineName: updatedMedicine.name,
+          dosage: updatedMedicine.dosage,
+          title: updatedMedicine.name,
+          description: updatedMedicine.instructions?.isNotEmpty == true
+              ? updatedMedicine.instructions!
+              : "Time to take the medicine - ${updatedMedicine.name}",
+          hour: hour,
+          minute: minute,
+          isRepeating: true,
+          isActive: true, // ✅ must be active
+          selectedDays: List.from(_selectedDays),
+        );
+
+        await AlarmService.saveAlarm(newAlarm);
+      }
+
+      // ✅ Sync with Supabase
+      await Supabase.instance.client.from('medicine').update({
+        'name': updatedMedicine.name,
+        'dosage': updatedMedicine.dosage,
+        'expiry_date': updatedMedicine.expiryDate.toIso8601String(),
+        'daily_intake_times': updatedMedicine.dailyIntakeTimes,
+        'total_quantity': updatedMedicine.totalQuantity,
+        'refill_threshold': updatedMedicine.refillThreshold,
+      }).eq('id', widget.medicineKey);
+
+      AppSnackbar.show(context,
+          message: "Medicine & Alarms Updated", success: true);
+      Navigator.pop(context);
+    } catch (e) {
+      print(e);
+      AppSnackbar.show(context,
+          message: "Failed to Update: $e", success: false);
+    } finally {
+      setState(() => _isediting = false);
+    }
   }
-  
-  try {
-    final box = Hive.box<Medicine>('medicinesBox');
-    
-    final doseTimes = _doseTimes.take(_timesPerDay!).map((t) =>
-        "${t!.hour.toString().padLeft(2, '0')}:${t.minute.toString().padLeft(2, '0')}").toList();
-    print("key"+widget.medicine.id);
-    final updatedMedicine = Medicine(
-      
-      id: widget.medicine.id, // Keep the original ID
-      name: _nameController.text.trim(),
-      dosage: _dosageController.text.trim(),
-      expiryDate: _selectedDate!,
-      dailyIntakeTimes: doseTimes,
-      quantityLeft: widget.medicine.quantityLeft,
-      totalQuantity: int.parse(_stockController.text.trim()),
-      refillThreshold: int.parse(_thresholdController.text.trim()),
-    );
-    
-    // CRITICAL: Use the same key pattern as _refreshData()
-    await box.put(widget.medicineKey, updatedMedicine); // Use medicine.id, not widget.medicineKey
-    
-    // Update Supabase
-    await Supabase.instance.client.from('medicine').update({
-      'name': updatedMedicine.name,
-      'dosage': updatedMedicine.dosage,
-      'expiry_date': updatedMedicine.expiryDate.toIso8601String(),
-      'daily_intake_times': updatedMedicine.dailyIntakeTimes,
-      'total_quantity': updatedMedicine.totalQuantity,
-      'refill_threshold': updatedMedicine.refillThreshold,
-    }).eq('id', widget.medicineKey);
-    
-    AppSnackbar.show(context, message: "Medicine Updated", success: true);
-    Navigator.pop(context);
-  } catch (e) {
-    AppSnackbar.show(context, message: "Failed to Update", success: false);
-  } finally {
-    setState(() => _isediting = false);
-  }
-}
 
   @override
   Widget build(BuildContext context) {
@@ -374,6 +403,45 @@ void _saveChanges() async {
                       borderRadius: BorderRadius.circular(12)),
                 ),
               ),
+              const SizedBox(height: 16),
+              TextFormField(
+                controller: _instructionsController,
+                maxLines: 1,
+                decoration: InputDecoration(
+                  labelText: 'Instructions (optional)',
+                  prefixIcon: Icon(Icons.edit_note_sharp, color: mainGreen),
+                ),
+                keyboardType: TextInputType.text,
+              ),
+              SwitchListTile(
+                title: const Text('Enable Reminder'),
+                value: _enableReminder,
+                onChanged: (v) => setState(() => _enableReminder = v),
+              ),
+
+              if (_enableReminder) ...[
+                SwitchListTile(
+                  title: const Text('Repeat Daily'),
+                  value: _isRepeating,
+                  onChanged: (v) => setState(() => _isRepeating = v),
+                ),
+                if (_isRepeating) ...[
+                  const Text('Repeat on:',
+                      style: TextStyle(fontWeight: FontWeight.bold)),
+                  const SizedBox(height: 8),
+                  Wrap(
+                    spacing: 8,
+                    children: List.generate(7, (i) {
+                      return FilterChip(
+                        label: Text(_dayNames[i]),
+                        selected: _selectedDays[i],
+                        onSelected: (s) => setState(() => _selectedDays[i] = s),
+                        selectedColor: Colors.green.shade200,
+                      );
+                    }),
+                  ),
+                ],
+              ],
               const SizedBox(height: 32),
               // Save Button
               SizedBox(

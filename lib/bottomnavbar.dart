@@ -1,6 +1,8 @@
+import 'package:audioplayers/audioplayers.dart';
 import 'package:flutter/material.dart';
 import 'package:fluttertoast/fluttertoast.dart';
 import 'package:hive_flutter/adapters.dart';
+import 'package:medremind/Hivemodel/alarm_model.dart';
 import 'package:medremind/Hivemodel/chat_message.dart';
 import 'package:medremind/pages/auth/loginpage.dart';
 import 'package:medremind/pages/chatpage.dart';
@@ -10,6 +12,8 @@ import 'package:medremind/pages/innerpages/reportpage.dart';
 import 'package:medremind/pages/refillpage.dart';
 import 'package:medremind/pages/historypage.dart';
 import 'package:medremind/utils/customsnackbar.dart';
+import 'package:permission_handler/permission_handler.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 import '../chatmanager/chat_manager.dart';
 import '../chatmanager/voice_chat_overlay.dart';
@@ -30,15 +34,23 @@ class _BottomnavbarState extends State<Bottomnavbar>
     with TickerProviderStateMixin {
   late int _selectedIndex;
   DateTime? _lastBackPressTime;
+
 // Use childId for further queries, navigation, etc.
   final session = Hive.box('session');
 //for chat
   final VoiceChatManager _voiceManager = VoiceChatManager();
   bool _showVoiceOverlay = false;
   //for chatpage
-
+  final AudioPlayer _player = AudioPlayer();
   late AnimationController _bottomBarController;
   late Animation<Offset> _bottomBarAnimation;
+
+  final List<String> availableSounds = [
+    "alarm1.mp3",
+    "alarm2.mp3",
+    "alarm3.mp3",
+  ];
+  String? _selectedSound;
 
   @override
   void initState() {
@@ -76,6 +88,126 @@ class _BottomnavbarState extends State<Bottomnavbar>
         }
       });
     };
+
+    getSelectedSound().then((value) {
+      setState(() => _selectedSound = value);
+    });
+    _requestPermissions();
+  }
+
+  Future<void> saveSelectedSound(String path) async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString("selectedSound", path);
+  }
+
+  Future<String> getSelectedSound() async {
+    final prefs = await SharedPreferences.getInstance();
+    return prefs.getString("selectedSound") ?? availableSounds.first;
+  }
+
+  Future _requestPermissions() async {
+    await Permission.notification.request();
+    await Permission.ignoreBatteryOptimizations.request();
+    await Permission.ignoreBatteryOptimizations.request();
+
+    // Check and request exact alarm permission specifically
+    final status = await Permission.scheduleExactAlarm.status;
+    print('Schedule exact alarm permission: $status.');
+    if (status.isDenied) {
+      print('Requesting schedule exact alarm permission...');
+      final res = await Permission.scheduleExactAlarm.request();
+      print(
+          'Schedule exact alarm permission ${res.isGranted ? '' : 'not'} granted.');
+    }
+  }
+
+  bool _vibrationEnabled = true; // default
+
+  void _chooseSound() async {
+    String? sound = await showDialog<String>(
+      context: context,
+      builder: (context) {
+        String? selectedSound = _selectedSound;
+        bool tempVibration = _vibrationEnabled;
+
+        return StatefulBuilder(
+          builder: (context, setState) => AlertDialog(
+            title: const Text("Choose Notification Sound"),
+            content: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                // List of sounds with preview on tap
+                ListView.builder(
+                  shrinkWrap: true,
+                  itemCount: availableSounds.length,
+                  itemBuilder: (context, index) {
+                    final soundFile = availableSounds[index];
+                    return RadioListTile<String>(
+                      title: Text(soundFile),
+                      value: soundFile,
+                      groupValue: selectedSound,
+                      onChanged: (value) async {
+                        setState(() => selectedSound = value);
+
+                        // play preview
+                        await _player.stop();
+                        await _player.play(AssetSource("sounds/$soundFile"));
+                        print("Playing $soundFile");
+                      },
+                    );
+                  },
+                ),
+                const Divider(),
+                // Vibration toggle
+                SwitchListTile(
+                  title: const Text("Vibration"),
+                  secondary: const Icon(Icons.vibration),
+                  value: tempVibration,
+                  onChanged: (val) {
+                    setState(() => tempVibration = val);
+                  },
+                ),
+              ],
+            ),
+            actions: [
+              TextButton(
+                onPressed: () {
+                  _player.stop();
+                  Navigator.pop(context);
+                },
+                child: const Text("Cancel"),
+              ),
+              ElevatedButton(
+                onPressed: () {
+                  setState(() {
+                    _vibrationEnabled = tempVibration;
+                    _selectedSound = selectedSound;
+                  });
+                  saveSelectedSound(_selectedSound!);
+                  saveVibrationPref(_vibrationEnabled);
+
+                  _player.stop();
+                  Navigator.pop(context, selectedSound);
+                },
+                child: const Text("OK"),
+              ),
+            ],
+          ),
+        );
+      },
+    );
+  }
+
+  /// Save vibration preference
+  Future<void> saveVibrationPref(bool value) async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setBool("vibrationEnabled", value);
+  }
+
+  /// Load vibration preference
+  Future<bool> getVibrationPref() async {
+    final prefs = await SharedPreferences.getInstance();
+    return prefs.getBool("vibrationEnabled") ?? true;
   }
 
   void _handleMicPressed() {
@@ -493,11 +625,11 @@ class _BottomnavbarState extends State<Bottomnavbar>
       builder: (context, box, widget) {
         String username = 'Guest User';
 
-        // Get updated username from Hive
         final user = box.get('user');
         if (user != null) {
           username = user.username;
         }
+
         return Drawer(
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -530,32 +662,22 @@ class _BottomnavbarState extends State<Bottomnavbar>
                   ],
                 ),
               ),
-              // Drawer options above Logout
               Expanded(
                 child: ListView(
                   padding: EdgeInsets.zero,
                   children: [
-                    // Push Notifications (default color)
+                    // Notification Sound
                     ListTile(
-                      leading: const Icon(
-                        Icons.notifications_active_outlined,
-                        color: Color.fromARGB(255, 255, 153, 0),
-                      ),
-                      title: const Text("Push Notifications"),
-                      trailing: Switch(
-                        trackColor: MaterialStateProperty.all(
-                          const Color.fromARGB(255, 255, 202, 159),
-                        ),
-                        activeColor: Colors.green[700],
-                        value: isNotificationEnabled,
-                        onChanged: (value) {
-                          setState(() {
-                            isNotificationEnabled = value;
-                          });
-                        },
-                      ),
+                      leading: const Icon(Icons.notifications_active,
+                          color: Colors.orange),
+                      title: const Text("Sound and Vibration"),
+                      subtitle: Text(_selectedSound ?? "Default"),
+                      onTap: _chooseSound,
                     ),
-                    // Profile (green outline, icon, and text)
+                    // Vibration
+
+                    const Divider(),
+                    // Profile
                     Padding(
                       padding: const EdgeInsets.symmetric(
                           vertical: 6.0, horizontal: 8),
@@ -580,7 +702,7 @@ class _BottomnavbarState extends State<Bottomnavbar>
                         ),
                       ),
                     ),
-                    // Health Reports (red outline, icon, and text)
+                    // Health Reports
                     Padding(
                       padding: const EdgeInsets.symmetric(
                           vertical: 6.0, horizontal: 8),
@@ -600,8 +722,7 @@ class _BottomnavbarState extends State<Bottomnavbar>
                             Navigator.push(
                               context,
                               MaterialPageRoute(
-                                builder: (context) =>
-                                    Reportspage(), // Replace with HealthReportsPage()
+                                builder: (context) => Reportspage(),
                               ),
                             );
                           },
@@ -611,7 +732,7 @@ class _BottomnavbarState extends State<Bottomnavbar>
                   ],
                 ),
               ),
-              // Logout at bottom
+              // Logout
               Padding(
                 padding:
                     const EdgeInsets.symmetric(vertical: 16.0, horizontal: 8),
@@ -669,8 +790,9 @@ class _BottomnavbarState extends State<Bottomnavbar>
                                     .clear();
                                 await Hive.box<HistoryEntry>('historyBox')
                                     .clear();
-                                Hive.box<ChatMessage>('chatMessages')
-                                    .clear(); // Fixed box name
+                                await Hive.box<ChatMessage>('chatMessages')
+                                    .clear();
+                                await Hive.box<AlarmModel>('alarms').clear();
                                 await Hive.box('session').clear();
 
                                 Navigator.pushReplacement(

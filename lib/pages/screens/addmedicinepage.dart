@@ -1,8 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:hive/hive.dart';
+import '../../Hivemodel/alarm_model.dart';
 import '../../Hivemodel/medicine.dart';
 import '../../Hivemodel/user_settings.dart';
+import '../../reminder/services/alarm_service.dart';
 import '../../services/hive_services.dart';
 import '../../utils/customsnackbar.dart';
 import '../../utils/date_utils.dart';
@@ -26,6 +28,18 @@ class _AddMedicinePageState extends State<AddMedicinePage> {
   DateTime? _selectedDate;
   int? _timesPerDay;
   List<TimeOfDay?> _doseTimes = [null, null, null, null];
+  bool _enableReminder = true; // toggle reminder on/off
+  bool _isRepeating = true; // repeat daily
+  List<bool> _selectedDays = List.filled(7, true);
+  final List<String> _dayNames = [
+    'Mon',
+    'Tue',
+    'Wed',
+    'Thu',
+    'Fri',
+    'Sat',
+    'Sun'
+  ];
 
   String? _intValidator(String? value, String fieldName) {
     if (value == null || value.trim().isEmpty) return 'Enter $fieldName';
@@ -102,7 +116,7 @@ class _AddMedicinePageState extends State<AddMedicinePage> {
             message: "Medicine \"$name\" already exists.", success: false);
         return;
       }
-  // 5️⃣ Save to Supabase
+      // 5️⃣ Save to Supabase
       final supabase = Supabase.instance.client;
       final response = await supabase.from('medicine').insert({
         'child_id': childId,
@@ -114,7 +128,6 @@ class _AddMedicinePageState extends State<AddMedicinePage> {
         'quantity_left': int.parse(_quantityController.text),
         'refill_threshold': int.parse(_thresholdController.text),
         'created_at': DateTime.now().toIso8601String(),
-        
       }).select();
 
       if (response.isEmpty) {
@@ -142,7 +155,25 @@ class _AddMedicinePageState extends State<AddMedicinePage> {
       // 4️⃣ Save to Hive first
       await medicineBox.add(medicine);
 
-    
+      if (_enableReminder) {
+        for (int i = 0; i < _timesPerDay!; i++) {
+          final doseTime = _doseTimes[i]!;
+          final alarm = AlarmModel(
+            id: DateTime.now().millisecondsSinceEpoch.remainder(100000),
+            medicineName: medicine.name,
+            dosage: medicine.dosage,
+            title: medicine.name,
+            description: "Time to take the medicine - ${medicine.instructions}",
+            hour: doseTime.hour,
+            minute: doseTime.minute,
+            isRepeating: _isRepeating,
+            selectedDays: List.from(_selectedDays),
+          );
+          await AlarmService.saveAlarm(alarm); // schedules notification
+         
+        }
+      }
+
       // 6️⃣ (Optional) Schedule notifications
       for (final timeStr in medicine.dailyIntakeTimes) {
         final parts = timeStr.split(':');
@@ -223,8 +254,7 @@ class _AddMedicinePageState extends State<AddMedicinePage> {
         title:
             const Text('New Medicine', style: TextStyle(color: Colors.white)),
         backgroundColor: Colors.green[700],
-            centerTitle: true,
-
+        centerTitle: true,
       ),
       body: SingleChildScrollView(
         padding: const EdgeInsets.all(24),
@@ -334,7 +364,7 @@ class _AddMedicinePageState extends State<AddMedicinePage> {
                   ),
                 ),
               ),
-               const SizedBox(height: 16),
+              const SizedBox(height: 16),
               TextFormField(
                 controller: _instructionsController,
                 maxLines: 1,
@@ -343,8 +373,36 @@ class _AddMedicinePageState extends State<AddMedicinePage> {
                   prefixIcon: Icon(Icons.edit_note_sharp, color: mainGreen),
                 ),
                 keyboardType: TextInputType.text,
-               
               ),
+              SwitchListTile(
+  title: const Text('Enable Reminder'),
+  value: _enableReminder,
+  onChanged: (v) => setState(() => _enableReminder = v),
+),
+
+if (_enableReminder) ...[
+  SwitchListTile(
+    title: const Text('Repeat Daily'),
+    value: _isRepeating,
+    onChanged: (v) => setState(() => _isRepeating = v),
+  ),
+  if (_isRepeating) ...[
+    const Text('Repeat on:', style: TextStyle(fontWeight: FontWeight.bold)),
+    const SizedBox(height: 8),
+    Wrap(
+      spacing: 8,
+      children: List.generate(7, (i) {
+        return FilterChip(
+          label: Text(_dayNames[i]),
+          selected: _selectedDays[i],
+          onSelected: (s) => setState(() => _selectedDays[i] = s),
+          selectedColor: Colors.green.shade200,
+        );
+      }),
+    ),
+  ],
+],
+
               const SizedBox(height: 16),
               const SizedBox(height: 32),
               ElevatedButton(

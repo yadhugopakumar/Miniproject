@@ -3,6 +3,9 @@ import 'package:hive/hive.dart';
 import 'package:medremind/Hivemodel/user_settings.dart';
 import 'package:medremind/pages/auth/register.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+import '../../Hivemodel/alarm_model.dart';
+import '../../Hivemodel/medicine.dart';
+import '../../reminder/services/alarm_service.dart';
 import '../../utils/customsnackbar.dart';
 import '../../utils/successdialogue.dart';
 import 'loginforgotpassword.dart';
@@ -83,6 +86,8 @@ class _LoginPageState extends State<LoginPage> {
 
       // final session = Hive.box('session');
 
+// ✅ Fetch medicines after login
+      await _fetchMedicinesAndScheduleAlarms(userSettings.childId);
       // print(session.get('childId'));
       // Navigate to the PIN page (or desired page)
       setState(() => _isloginLoading = false);
@@ -107,6 +112,83 @@ class _LoginPageState extends State<LoginPage> {
 
       AppSnackbar.show(context,
           message: "Unexpected error, please try again", success: false);
+    }
+  }
+
+  Future<void> _fetchMedicinesAndScheduleAlarms(String childId) async {
+    try {
+      final supabase = Supabase.instance.client;
+
+      // Fetch medicines for this child
+      final response = await supabase
+          .from('medicine')
+          .select()
+          .eq('child_id', childId)
+          .order('id', ascending: true);
+
+      if (response.isEmpty) {
+        debugPrint("⚠️ No medicines found for child $childId");
+        return;
+      }
+
+      // Hive boxes
+      final medicinesBox = Hive.box<Medicine>('medicinesBox');
+      final alarmsBox = Hive.box<AlarmModel>('alarmsBox');
+
+      // Clear old data
+      await medicinesBox.clear();
+      await alarmsBox.clear();
+
+      for (final item in response) {
+        // Map to Medicine model
+        final medicine = Medicine(
+          id: item['id'].toString(),
+          name: item['name'],
+          dosage: item['dosage'],
+          expiryDate: DateTime.parse(item['expiry_date']),
+          dailyIntakeTimes: List<String>.from(item['daily_intake_times'] ?? []),
+          totalQuantity: item['total_quantity'],
+          quantityLeft: item['quantity_left'],
+          refillThreshold: item['refill_threshold'],
+          instructions: item['instructions'],
+        );
+
+        // Save to medicines box
+        await medicinesBox.put(medicine.id, medicine);
+
+        // 🔔 Create alarms for each intake time
+        for (final time in medicine.dailyIntakeTimes) {
+          final parts = time.split(":");
+          if (parts.length == 2) {
+            final hour = int.parse(parts[0]);
+            final minute = int.parse(parts[1]);
+
+            // Unique alarm id per medicine + time
+            final alarmId = '${medicine.id}-$hour$minute'.hashCode;
+
+            final alarm = AlarmModel(
+              id: alarmId,
+              title: 'Medicine Reminder',
+              description: 'Time to take your medicine',
+              dosage: medicine.dosage,
+              hour: hour,
+              minute: minute,
+              medicineName: medicine.name,
+              isActive: true,
+              isRepeating: true, // make true if you want daily repeat
+            );
+
+            // ✅ Save & schedule alarm via service
+            await AlarmService.saveAlarm(alarm);
+
+            debugPrint(
+                "✅ Scheduled alarm for ${medicine.name} at ${hour.toString().padLeft(2, '0')}:${minute.toString().padLeft(2, '0')}");
+          }
+        }
+      }
+    } catch (e, st) {
+      debugPrint("❌ Failed to fetch medicines or schedule alarms: $e");
+      debugPrintStack(stackTrace: st);
     }
   }
 
