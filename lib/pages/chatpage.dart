@@ -44,7 +44,9 @@ class _ChatpageState extends State<Chatpage> with TickerProviderStateMixin {
   @override
   void initState() {
     super.initState();
-    apiKey = dotenv.env['API_KEY'] ?? "";
+    // apiKey = dotenv.env['API_KEY'] ?? "";
+    apiKey = "AIzaSyDT1NimstllZmAz-mX56tFC03V4lOZp0OY";
+
     provider = GeminiProvider(apiKey: apiKey);
     _initTts();
 
@@ -198,7 +200,6 @@ class _ChatpageState extends State<Chatpage> with TickerProviderStateMixin {
         .replaceAll(RegExp(r'[📄📊💊🩺]'), '');
   }
 
-
   Future<void> _processImage(File imageFile, String analysisType) async {
     _shouldAutoScroll = true;
     _hideWelcomeMessage();
@@ -233,37 +234,37 @@ class _ChatpageState extends State<Chatpage> with TickerProviderStateMixin {
     try {
       String response;
 
-if (analysisType == 'prescription') {
-  // Get structured data for prescription analysis
-  Map<String, dynamic> analysisResult =
-      await provider.analyzePrescriptionWithStructuredData(imageFile);
+      if (analysisType == 'prescription') {
+        // Get structured data for prescription analysis
+        Map<String, dynamic> analysisResult =
+            await provider.analyzePrescriptionWithStructuredData(imageFile);
 
-  // Extract medicines and store in session storage
-  if (analysisResult['medicines'] != null) {
-    List<ExtractedMedicine> medicines =
-        (analysisResult['medicines'] as List)
-            .map((m) => ExtractedMedicine(
-                  name: m['name']?.toString() ?? '',
-                  dosage: m['dosage']?.toString() ?? '',
-                  duration: m['duration']?.toString() ?? '',
-                  instructions: m['instructions']?.toString() ?? '',
-                  dailyIntakeTimes: m['dailyIntakeTimes'] != null
-                      ? List<String>.from(m['dailyIntakeTimes'])
-                      : [], // ✅ FIXED
-                ))
-            .toList();
+        // Extract medicines and store in session storage
+        if (analysisResult['medicines'] != null) {
+          List<ExtractedMedicine> medicines =
+              (analysisResult['medicines'] as List)
+                  .map((m) => ExtractedMedicine(
+                        name: m['name']?.toString() ?? '',
+                        dosage: m['dosage']?.toString() ?? '',
+                        duration: m['duration']?.toString() ?? '',
+                        instructions: m['instructions']?.toString() ?? '',
+                        dailyIntakeTimes: m['dailyIntakeTimes'] != null
+                            ? List<String>.from(m['dailyIntakeTimes'])
+                            : [], // ✅ FIXED
+                      ))
+                  .toList();
 
-    // ✅ Store extracted medicines
-    ExtractedMedicineStorage.setExtractedMedicines(medicines);
-  }
+          // ✅ Store extracted medicines
+          ExtractedMedicineStorage.setExtractedMedicines(medicines);
+        }
 
-  // Use the structured response
-  response = analysisResult['response'] ??
-      'Prescription analyzed successfully.';
-} else {
-  // Health report analysis (no structured data needed)
-  response = await provider.analyzeHealthReportWithImage(imageFile, null);
-}
+        // Use the structured response
+        response =
+            analysisResult['response'] ?? 'Prescription analyzed successfully.';
+      } else {
+        // Health report analysis (no structured data needed)
+        response = await provider.analyzeHealthReportWithImage(imageFile, null);
+      }
 
       final botMessage = ChatMessage(
         role: 'bot',
@@ -794,50 +795,51 @@ if (analysisType == 'prescription') {
           const SizedBox(height: 8),
           ...medicines
               .map((medicine) => Container(
-                    width: double.infinity,
-                    margin: const EdgeInsets.only(bottom: 2),
-                    child:InkWell(
-  onTap: () => _navigateToAddMedicine(medicine),
-  child: Container(
-    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-    decoration: BoxDecoration(
-      color: Color.fromARGB(255, 255, 254, 179),
-      borderRadius: BorderRadius.circular(8),
-      border: Border.all(color: Colors.green[300]!),
-    ),
-    child: Row(
-      crossAxisAlignment: CrossAxisAlignment.center, // center vertically
-      children: [
-        Icon(Icons.add_circle_outline, size: 18, color: Colors.green[800]),
-        const SizedBox(width: 8),
-        Expanded(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Text(
-                medicine.name,
-                style: const TextStyle(
-                  fontSize: 14,
-                  fontWeight: FontWeight.w600,
-                ),
-              ),
-              if (medicine.dosage.isNotEmpty ||
-                  medicine.instructions.isNotEmpty ||
-                  medicine.dailyIntakeTimes.isNotEmpty)
-                Text(
-                  "${medicine.dosage} • ${medicine.instructions} • at ${medicine.dailyIntakeTimes.join(", ")}",
-                  style: const TextStyle(fontSize: 12),
-                ),
-            ],
-          ),
-        ),
-      ],
-    ),
-  ),
-)
-
-                  ))
+                  width: double.infinity,
+                  margin: const EdgeInsets.only(bottom: 2),
+                  child: InkWell(
+                    onTap: () => _navigateToAddMedicine(medicine),
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 10, vertical: 4),
+                      decoration: BoxDecoration(
+                        color: Color.fromARGB(255, 255, 254, 179),
+                        borderRadius: BorderRadius.circular(8),
+                        border: Border.all(color: Colors.green[300]!),
+                      ),
+                      child: Row(
+                        crossAxisAlignment:
+                            CrossAxisAlignment.center, // center vertically
+                        children: [
+                          Icon(Icons.add_circle_outline,
+                              size: 18, color: Colors.green[800]),
+                          const SizedBox(width: 8),
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                Text(
+                                  medicine.name,
+                                  style: const TextStyle(
+                                    fontSize: 14,
+                                    fontWeight: FontWeight.w600,
+                                  ),
+                                ),
+                                if (medicine.dosage.isNotEmpty ||
+                                    medicine.instructions.isNotEmpty ||
+                                    medicine.dailyIntakeTimes.isNotEmpty)
+                                  Text(
+                                    "${medicine.dosage} • ${medicine.instructions} • at ${medicine.dailyIntakeTimes.join(", ")}",
+                                    style: const TextStyle(fontSize: 12),
+                                  ),
+                              ],
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  )))
               .toList(),
         ],
       ),

@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:hive_flutter/adapters.dart';
 import 'package:medremind/constants/constants.dart';
 import 'package:medremind/pages/auth/loginpage.dart';
@@ -36,8 +35,8 @@ Future<void> main() async {
     url: Appconstants.supabase_url,
     anonKey: Appconstants.supabase_anon_key,
   );
-  await dotenv.load(
-      fileName: "/media/yadhu/hdisk/flutter_projects/medremind/.env");
+  // await dotenv.load(
+  //     fileName: "/media/yadhu/hdisk/flutter_projects/medremind/.env");
 
   runApp(const MyApp());
 }

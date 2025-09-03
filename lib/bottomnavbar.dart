@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:fluttertoast/fluttertoast.dart';
 import 'package:hive_flutter/adapters.dart';
 import 'package:medremind/Hivemodel/chat_message.dart';
 import 'package:medremind/pages/auth/loginpage.dart';
@@ -28,7 +29,7 @@ class Bottomnavbar extends StatefulWidget {
 class _BottomnavbarState extends State<Bottomnavbar>
     with TickerProviderStateMixin {
   late int _selectedIndex;
-
+  DateTime? _lastBackPressTime;
 // Use childId for further queries, navigation, etc.
   final session = Hive.box('session');
 //for chat
@@ -287,134 +288,151 @@ class _BottomnavbarState extends State<Bottomnavbar>
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      drawer: _buildDrawer(), // << Add this here
-      extendBody: true,
-      floatingActionButtonLocation: FloatingActionButtonLocation.centerDocked,
-      floatingActionButton: _selectedIndex != 1
-          ? AnimatedContainer(
-              duration: Duration(milliseconds: 300),
-              transform: Matrix4.translationValues(
-                  0,
-                  _showVoiceOverlay
-                      ? 200
-                      : 0, // Move FAB down when overlay is active
-                  0),
-              child: Padding(
-                padding: const EdgeInsets.only(bottom: 9),
-                child: Material(
-                  color: const Color.fromARGB(255, 93, 255, 101),
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(35),
-                  ),
-                  elevation: 20,
-                  child: Container(
-                    height: 65.0,
-                    width: 65.0,
-                    child: FloatingActionButton(
-                      // backgroundColor: Color.fromARGB(255, 75, 44, 90),
-                      backgroundColor: const Color.fromARGB(255, 16, 59, 65),
+    return WillPopScope(
+      onWillPop: () async {
+        DateTime now = DateTime.now();
+        if (_lastBackPressTime == null ||
+            now.difference(_lastBackPressTime!) > const Duration(seconds: 2)) {
+          _lastBackPressTime = now;
+          Fluttertoast.showToast(
+            msg: "Press back again to exit",
+            toastLength: Toast.LENGTH_SHORT,
+            gravity: ToastGravity.BOTTOM,
+          );
+          return false; // Don't exit yet
+        }
+        return true; // Exit app
+      },
+      child: Scaffold(
+        drawer: _buildDrawer(), // << Add this here
+        extendBody: true,
+        floatingActionButtonLocation: FloatingActionButtonLocation.centerDocked,
+        floatingActionButton: _selectedIndex != 1
+            ? AnimatedContainer(
+                duration: Duration(milliseconds: 300),
+                transform: Matrix4.translationValues(
+                    0,
+                    _showVoiceOverlay
+                        ? 200
+                        : 0, // Move FAB down when overlay is active
+                    0),
+                child: Padding(
+                  padding: const EdgeInsets.only(bottom: 9),
+                  child: Material(
+                    color: const Color.fromARGB(255, 93, 255, 101),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(35),
+                    ),
+                    elevation: 20,
+                    child: Container(
+                      height: 65.0,
+                      width: 65.0,
+                      child: FloatingActionButton(
+                        // backgroundColor: Color.fromARGB(255, 75, 44, 90),
+                        backgroundColor: const Color.fromARGB(255, 16, 59, 65),
 
-                      onPressed: _handleMicPressed,
-                      child: const Icon(
-                        Icons.mic_none_sharp,
-                        size: 33,
-                        color: Color.fromARGB(255, 174, 233, 156),
-                        // color: Color.fromARGB(255, 255, 216, 42),
+                        onPressed: _handleMicPressed,
+                        child: const Icon(
+                          Icons.mic_none_sharp,
+                          size: 33,
+                          color: Color.fromARGB(255, 174, 233, 156),
+                          // color: Color.fromARGB(255, 255, 216, 42),
+                        ),
                       ),
                     ),
                   ),
                 ),
-              ),
-            )
-          : null,
-      bottomNavigationBar: _selectedIndex != 1
-          ? SlideTransition(
-              position: _bottomBarAnimation,
-              child: AbsorbPointer(
-                absorbing: _showVoiceOverlay,
-                child: Padding(
-                  padding:
-                      const EdgeInsets.only(left: 10, right: 10, bottom: 15),
-                  child: BottomAppBar(
-                    color: Colors.transparent,
-                    shape: const CircularNotchedRectangle(),
-                    notchMargin: 6.0,
-                    elevation: 0,
-                    child: Container(
-                        decoration: BoxDecoration(
-                          color: Colors.green[900]!.withOpacity(0.85),
-                          // color: Colors.purple[900]!.withOpacity(0.8),
+              )
+            : null,
+        bottomNavigationBar: _selectedIndex != 1
+            ? SlideTransition(
+                position: _bottomBarAnimation,
+                child: AbsorbPointer(
+                  absorbing: _showVoiceOverlay,
+                  child: Padding(
+                    padding:
+                        const EdgeInsets.only(left: 10, right: 10, bottom: 15),
+                    child: BottomAppBar(
+                      color: Colors.transparent,
+                      shape: const CircularNotchedRectangle(),
+                      notchMargin: 6.0,
+                      elevation: 0,
+                      child: Container(
+                          decoration: BoxDecoration(
+                            color: Colors.green[900]!.withOpacity(0.85),
+                            // color: Colors.purple[900]!.withOpacity(0.8),
 
-                          borderRadius: BorderRadius.circular(15),
-                          border: Border.all(
-                            color: Colors.green[900]!,
-                            width: 0.1,
-                          ),
-                        ),
-                        height: kToolbarHeight + 5,
-                        child: Row(
-                          mainAxisAlignment: MainAxisAlignment.spaceAround,
-                          children: [
-                            _buildNavItem(
-                                icon: Icons.home_outlined,
-                                index: 0,
-                                label: "Home"),
-                            _buildNavItem(
-                              icon: Icons.message_outlined,
-                              index: 1,
-                              label: "Chat",
+                            borderRadius: BorderRadius.circular(15),
+                            border: Border.all(
+                              color: Colors.green[900]!,
+                              width: 0.1,
                             ),
-                            Stack(
-                              alignment: Alignment.topCenter,
-                              clipBehavior: Clip.none,
-                              children: [
-                                Container(
-                                  width: MediaQuery.of(context).size.width / 8,
-                                  height: 50,
-                                  color: Colors
-                                      .transparent, // optional background placeholder
-                                ),
-                                Positioned(
-                                  top:
-                                      -48, // half of height to make it overlap nicely
-                                  child: Container(
-                                    width: 75,
-                                    height: 75,
-                                    decoration: const BoxDecoration(
-                                      color: Colors.white,
-                                      shape: BoxShape.circle,
+                          ),
+                          height: kToolbarHeight + 5,
+                          child: Row(
+                            mainAxisAlignment: MainAxisAlignment.spaceAround,
+                            children: [
+                              _buildNavItem(
+                                  icon: Icons.home_outlined,
+                                  index: 0,
+                                  label: "Home"),
+                              _buildNavItem(
+                                icon: Icons.message_outlined,
+                                index: 1,
+                                label: "Chat",
+                              ),
+                              Stack(
+                                alignment: Alignment.topCenter,
+                                clipBehavior: Clip.none,
+                                children: [
+                                  Container(
+                                    width:
+                                        MediaQuery.of(context).size.width / 8,
+                                    height: 50,
+                                    color: Colors
+                                        .transparent, // optional background placeholder
+                                  ),
+                                  Positioned(
+                                    top:
+                                        -48, // half of height to make it overlap nicely
+                                    child: Container(
+                                      width: 75,
+                                      height: 75,
+                                      decoration: const BoxDecoration(
+                                        color: Colors.white,
+                                        shape: BoxShape.circle,
+                                      ),
                                     ),
                                   ),
-                                ),
-                              ],
-                            ),
-                            _buildNavItem(
-                                icon: Icons.history_rounded,
-                                index: 2,
-                                label: "History"),
-                            _buildNavItem(
-                                icon: Icons.recycling_outlined,
-                                index: 3,
-                                label: "Refill"),
-                          ],
-                        )),
+                                ],
+                              ),
+                              _buildNavItem(
+                                  icon: Icons.history_rounded,
+                                  index: 2,
+                                  label: "History"),
+                              _buildNavItem(
+                                  icon: Icons.recycling_outlined,
+                                  index: 3,
+                                  label: "Refill"),
+                            ],
+                          )),
+                    ),
                   ),
                 ),
-              ),
-            )
-          : null,
-      body: Stack(
-        // Wrap body in Stack
-        children: [
-          _pages[_selectedIndex],
+              )
+            : null,
+        body: Stack(
+          // Wrap body in Stack
+          children: [
+            _pages[_selectedIndex],
 
-          // Voice Chat Overlay
-          if (_showVoiceOverlay)
-            VoiceChatOverlay(
-              onClose: _closeVoiceOverlay,
-            ),
-        ],
+            // Voice Chat Overlay
+            if (_showVoiceOverlay)
+              VoiceChatOverlay(
+                onClose: _closeVoiceOverlay,
+              ),
+          ],
+        ),
       ),
     );
   }

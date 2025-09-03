@@ -7,8 +7,9 @@ import '../../Hivemodel/user_settings.dart';
 import 'gemini_provider.dart';
 
 class ChatService {
-  final GeminiProvider _aiProvider;
-
+  late final GeminiProvider _aiProvider;
+    String apiKey = "AIzaSyDT1NimstllZmAz-mX56tFC03V4lOZp0OY";
+   
   // Hive boxes
   late Box<Medicine> _medicineBox;
   late Box<HistoryEntry> _historyBox;
@@ -16,8 +17,8 @@ class ChatService {
   late Box<HealthReport> _reportBox;
   late Box _sessionBox;
 
-  ChatService()
-      : _aiProvider = GeminiProvider(apiKey: dotenv.env['API_KEY'] ?? "") {
+  ChatService() {
+    _aiProvider = GeminiProvider(apiKey: apiKey); // safe here
     _initializeBoxes();
   }
 
