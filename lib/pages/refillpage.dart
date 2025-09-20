@@ -20,7 +20,7 @@ class _RefillTrackerPageState extends State<RefillTrackerPage> {
 
   Future<void> _refreshData() async {
     try {
-    final userBox = Hive.box<UserSettings>('settingsBox'); // ✅ FIXED
+      final userBox = Hive.box<UserSettings>('settingsBox'); // ✅ FIXED
       final userSettings = userBox.get('user') as UserSettings?;
       if (userSettings == null) {
         AppSnackbar.show(context,
@@ -104,6 +104,7 @@ class _RefillTrackerPageState extends State<RefillTrackerPage> {
                   final lowStock = med.quantityLeft <= med.refillThreshold;
 
                   return Card(
+                    key: ValueKey(med.id), // ⚡ add this
                     color: Colors.teal[900],
                     shape: RoundedRectangleBorder(
                       borderRadius: BorderRadius.circular(16),

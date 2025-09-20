@@ -1,9 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:hive_flutter/hive_flutter.dart';
+import 'package:medremind/pages/screens/pdfviewerpage.dart';
 import 'package:table_calendar/table_calendar.dart';
 
 import '../../Hivemodel/history_entry.dart';
 import '../../Hivemodel/medicine.dart';
+import '../../utils/generatereport.dart';
 
 class Calendarpage extends StatefulWidget {
   const Calendarpage({super.key});
@@ -92,10 +94,19 @@ class _CalendarpageState extends State<Calendarpage> {
                     mainAxisSize: MainAxisSize.max,
                     children: [
                       ElevatedButton(
-                        onPressed: () {
-                          // Implement export functionality here
-                          // You can use a package like 'csv' to create a CSV file
-                          // and then save it or share it.
+                        onPressed: () async {
+                          final file =
+                              await generateMonthlyReportPdf(); // returns File
+                          if (file != null) {
+                            print(file.path);
+                            Navigator.push(
+                              context,
+                              MaterialPageRoute(
+                                builder: (_) => PdfViewPage(
+                                    path: file.path), // use file.path
+                              ),
+                            );
+                          }
                         },
                         style: ElevatedButton.styleFrom(
                           backgroundColor:

@@ -154,8 +154,6 @@ class _EditMedicinePageState extends State<EditMedicinePage> {
     }
 
     try {
-      final box = Hive.box<Medicine>('medicinesBox');
-
       // Format new times
       final doseTimes = _doseTimes
           .take(_timesPerDay!)
@@ -163,60 +161,52 @@ class _EditMedicinePageState extends State<EditMedicinePage> {
               "${t!.hour.toString().padLeft(2, '0')}:${t.minute.toString().padLeft(2, '0')}")
           .toList();
 
-      // Updated medicine
-      final updatedMedicine = Medicine(
-        id: widget.medicine.id,
-        name: _nameController.text.trim(),
-        dosage: _dosageController.text.trim(),
-        expiryDate: _selectedDate!,
-        dailyIntakeTimes: doseTimes,
-        quantityLeft: int.parse(_stockController.text.trim()),
-        totalQuantity: int.parse(_stockController.text.trim()),
-        refillThreshold: int.parse(_thresholdController.text.trim()),
-        instructions: _instructionsController.text.trim(),
-      );
+      // ✅ Update existing medicine object
+      final med = widget.medicine;
+      med.name = _nameController.text.trim();
+      med.dosage = _dosageController.text.trim();
+      med.expiryDate = _selectedDate!;
+      med.dailyIntakeTimes = doseTimes;
+      med.totalQuantity = int.parse(_stockController.text.trim());
+      med.quantityLeft = int.parse(_stockController.text.trim());
+      med.refillThreshold = int.parse(_thresholdController.text.trim());
+      med.instructions = _instructionsController.text.trim();
 
-      await box.put(widget.medicineKey, updatedMedicine);
+      await med.save(); // saves the same Hive object
 
       // ✅ Update alarms
       final alarmBox = Hive.box<AlarmModel>('alarms');
 
       // Remove old alarms for this medicine
       final oldAlarms = alarmBox.values
-          .where((alarm) => alarm.medicineName == widget.medicine.name)
+          .where((alarm) => alarm.medicineName == med.name)
           .toList();
 
-// Remove old alarms
       for (var alarm in oldAlarms) {
         await AlarmService.deleteAlarm(alarm.id);
         await alarmBox.delete(alarm.id);
       }
 
-// Add new alarms
+      // Add new alarms
       for (var i = 0; i < doseTimes.length; i++) {
         final parts = doseTimes[i].split(":");
         final hour = int.parse(parts[0]);
         final minute = int.parse(parts[1]);
 
-        int alarmId;
-        if (i < oldAlarms.length) {
-          alarmId = oldAlarms[i].id; // reuse existing
-        } else {
-          alarmId = DateTime.now().millisecondsSinceEpoch.remainder(100000);
-        }
+        final alarmId = DateTime.now().millisecondsSinceEpoch.remainder(100000);
 
         final newAlarm = AlarmModel(
           id: alarmId,
-          medicineName: updatedMedicine.name,
-          dosage: updatedMedicine.dosage,
-          title: updatedMedicine.name,
-          description: updatedMedicine.instructions?.isNotEmpty == true
-              ? updatedMedicine.instructions!
-              : "Time to take the medicine - ${updatedMedicine.name}",
+          medicineName: med.name,
+          dosage: med.dosage,
+          title: med.name,
+          description: med.instructions?.isNotEmpty == true
+              ? med.instructions!
+              : "Time to take the medicine - ${med.name}",
           hour: hour,
           minute: minute,
           isRepeating: true,
-          isActive: true, // ✅ must be active
+          isActive: true,
           selectedDays: List.from(_selectedDays),
         );
 
@@ -225,12 +215,13 @@ class _EditMedicinePageState extends State<EditMedicinePage> {
 
       // ✅ Sync with Supabase
       await Supabase.instance.client.from('medicine').update({
-        'name': updatedMedicine.name,
-        'dosage': updatedMedicine.dosage,
-        'expiry_date': updatedMedicine.expiryDate.toIso8601String(),
-        'daily_intake_times': updatedMedicine.dailyIntakeTimes,
-        'total_quantity': updatedMedicine.totalQuantity,
-        'refill_threshold': updatedMedicine.refillThreshold,
+        'name': med.name,
+        'dosage': med.dosage,
+        'expiry_date': med.expiryDate.toIso8601String(),
+        'daily_intake_times': med.dailyIntakeTimes,
+        'total_quantity': med.totalQuantity,
+        'quantity_left': med.quantityLeft,
+        'refill_threshold': med.refillThreshold,
       }).eq('id', widget.medicineKey);
 
       AppSnackbar.show(context,

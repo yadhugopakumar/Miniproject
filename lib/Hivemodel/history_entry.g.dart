@@ -21,13 +21,14 @@ class HistoryEntryAdapter extends TypeAdapter<HistoryEntry> {
       medicineName: fields[1] as String,
       status: fields[2] as String,
       time: fields[3] as String?,
+      snoozeCount: fields[4] as int,
     );
   }
 
   @override
   void write(BinaryWriter writer, HistoryEntry obj) {
     writer
-      ..writeByte(4)
+      ..writeByte(5)
       ..writeByte(0)
       ..write(obj.date)
       ..writeByte(1)
@@ -35,7 +36,9 @@ class HistoryEntryAdapter extends TypeAdapter<HistoryEntry> {
       ..writeByte(2)
       ..write(obj.status)
       ..writeByte(3)
-      ..write(obj.time);
+      ..write(obj.time)
+      ..writeByte(4)
+      ..write(obj.snoozeCount);
   }
 
   @override

@@ -1,11 +1,10 @@
 import 'package:alarm/alarm.dart';
 import 'package:flutter/material.dart';
 import 'package:hive/hive.dart';
+import 'package:medremind/reminder/vibrationcontroller.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-import 'package:vibration/vibration.dart';
 import 'package:audioplayers/audioplayers.dart';
 import '../Hivemodel/alarm_model.dart';
-import '../Hivemodel/history_entry.dart';
 import '../Hivemodel/medicine.dart';
 import 'services/alarm_service.dart';
 
@@ -53,77 +52,128 @@ class _AlarmRingScreenState extends State<AlarmRingScreen>
   Future<void> _startVibration() async {
     final prefs = await SharedPreferences.getInstance();
     final vibrationEnabled = prefs.getBool("vibrationEnabled") ?? true;
+    if (!vibrationEnabled) return;
 
-    if (!vibrationEnabled) {
-      debugPrint("Vibration is disabled by user");
-      return;
-    }
-
-    if (await Vibration.hasVibrator()) {
-      Vibration.vibrate(
-        pattern: [500, 1000, 500, 1000],
-        repeat: 0,
-      );
-    }
+    await VibrationController.startVibration();
   }
 
   Future<void> _stopAlarmAndVibration() async {
-    await Vibration.cancel();
+    await VibrationController.stopVibration();
     await Alarm.stop(widget.alarm.id);
-    await Alarm.stop(widget.alarm.id + 10000);
-    await _player.stop();
+    if (widget.alarm.snoozeId != null) {
+      await Alarm.stop(widget.alarm.snoozeId!);
+    }
   }
-
 
   Future<void> _handleSnooze() async {
     await _stopAlarmAndVibration();
 
-    final historyBox = Hive.box<HistoryEntry>('historyBox');
-    historyBox.add(
-      HistoryEntry(
-        date: DateTime.now(),
-        medicineName: widget.alarm.medicineName,
-        status: "taken Late",
-        time: TimeOfDay.now().format(context),
-      ),
-    );
+    final alarm = widget.alarm;
 
-    await AlarmService.snoozeAlarm(widget.alarm);
+    // Call service to snooze
+    await AlarmService.snoozeAlarm(alarm);
+
     if (mounted) {
       Navigator.pop(context);
-      
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Alarm snoozed for 5 minutes')),
+      );
     }
   }
 
   Future<void> _handleTaken() async {
     await _stopAlarmAndVibration();
 
-    final historyBox = Hive.box<HistoryEntry>('historyBox');
+    final alarm = widget.alarm;
     final medicineBox = Hive.box<Medicine>('medicinesBox');
 
-    // Save to history
-    historyBox.add(
-      HistoryEntry(
-        date: DateTime.now(),
-        medicineName: widget.alarm.medicineName,
-        status: "taken",
-        time: TimeOfDay.now().format(context),
-      ),
-    );
+    // Tell service to dismiss the alarm and update history
+    await AlarmService.dismissAlarm(alarm);
 
-    // Reduce stock
-    final medicine = medicineBox.values.firstWhere(
-      (m) => m.name == widget.alarm.medicineName,
-    );
-    medicine.quantityLeft = (medicine.quantityLeft - 1).clamp(0, 9999);
-    medicine.save();
+    // Reduce medicine stock (safe lookup)
+    Medicine? medicine;
+    try {
+      medicine =
+          medicineBox.values.firstWhere((m) => m.name == alarm.medicineName);
+    } catch (e) {
+      medicine = null;
+    }
 
-    await AlarmService.dismissAlarm(widget.alarm);
+    if (medicine != null) {
+      // medicine.quantityLeft = (medicine.quantityLeft - 1).clamp(0, 9999);
+      int dosageCount = int.tryParse(medicine.dosage) ?? 1;
+      // Decrease stock based on dosage
+      medicine.quantityLeft = (medicine.quantityLeft - dosageCount)
+          .clamp(0, medicine.totalQuantity);
+      await medicine.save();
+    }
+
+    if (mounted) {
+      Navigator.pop(context);
+
+      // The service marked history as "taken" or "takenLate" internally.
+      // If you want to show late message, read history or keep logic in the service.
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Medication taken successfully')),
+      );
+    }
+  }
+
+// Future<void> _handleMissed() async {
+//   await _stopAlarmAndVibration();
+
+//   final alarm = widget.alarm;
+
+//   // Mark missed directly and update model/history
+//   await AlarmService.updateHistoryStatus(alarm.medicineName, "missed");
+
+//   // Update alarm model state too (so UI reflects it)
+//   alarm.lastAction = 'missed';
+//   alarm.lastActionTime = DateTime.now();
+//   await AlarmService.box.put(alarm.id, alarm);
+
+//   // Stop any alarms
+//   await Alarm.stop(alarm.id);
+//   if (alarm.snoozeId != null) {
+//     await Alarm.stop(alarm.snoozeId!);
+//     alarm.snoozeId = null;
+//     await AlarmService.box.put(alarm.id, alarm);
+//   }
+
+//   if (mounted) {
+//     Navigator.pop(context);
+//     ScaffoldMessenger.of(context).showSnackBar(
+//       const SnackBar(content: Text('Dose marked as missed')),
+//     );
+//   }
+// }
+  Future<void> _handleMissed() async {
+    await _stopAlarmAndVibration();
+
+    final alarm = widget.alarm;
+    final time =
+        '${alarm.hour.toString().padLeft(2, '0')}:${alarm.minute.toString().padLeft(2, '0')}';
+
+    // Mark missed in history
+    await AlarmService.updateHistoryStatus(alarm.medicineName, time, "missed");
+
+    // Update alarm model state for UI
+    alarm.lastAction = 'missed';
+    alarm.lastActionTime = DateTime.now();
+    await AlarmService.box.put(alarm.id, alarm);
+
+    // Stop alarms
+    await Alarm.stop(alarm.id);
+    if (alarm.snoozeId != null) {
+      await Alarm.stop(alarm.snoozeId!);
+      alarm.snoozeId = null;
+      await AlarmService.box.put(alarm.id, alarm);
+    }
 
     if (mounted) {
       Navigator.pop(context);
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Great! Medication taken successfully')),
+        const SnackBar(content: Text('Dose marked as missed')),
       );
     }
   }
@@ -131,7 +181,6 @@ class _AlarmRingScreenState extends State<AlarmRingScreen>
   @override
   void dispose() {
     _pulseController.dispose();
-    Vibration.cancel();
     _player.dispose(); // release resources
     super.dispose();
   }
@@ -194,31 +243,80 @@ class _AlarmRingScreenState extends State<AlarmRingScreen>
                       child: Column(
                         children: [
                           Text(
-                           widget.alarm.medicineName,
+                            widget.alarm.medicineName,
                             style: const TextStyle(
                               fontSize: 25,
                               fontWeight: FontWeight.bold,
                             ),
                           ),
                           const SizedBox(height: 5),
-                          Text("Dosage:"+widget.alarm.dosage,style: TextStyle(fontSize: 15),),
+                          Text(
+                            "Dosage:" + widget.alarm.dosage,
+                            style: TextStyle(fontSize: 15),
+                          ),
                           const SizedBox(height: 4),
-                          Text(widget.alarm.description,style: TextStyle(fontSize: 15),),
+                          Text(
+                            widget.alarm.description,
+                            style: TextStyle(fontSize: 15),
+                          ),
                         ],
                       ),
                     ),
                   ),
-
                   const SizedBox(height: 40),
-                  Row(
+                  Column(
                     children: [
-                      Expanded(
+                      Row(
+                        children: [
+                          // Snooze button
+                          Expanded(
+                            child: ElevatedButton.icon(
+                              onPressed: _handleSnooze,
+                              icon: const Icon(Icons.schedule),
+                              label: const Text('SNOOZE\n5 MIN'),
+                              style: ElevatedButton.styleFrom(
+                                backgroundColor: Colors.orange,
+                                foregroundColor: Colors.white,
+                                padding:
+                                    const EdgeInsets.symmetric(vertical: 20),
+                                textStyle: const TextStyle(
+                                  fontSize: 16,
+                                  fontWeight: FontWeight.bold,
+                                ),
+                              ),
+                            ),
+                          ),
+                          const SizedBox(width: 16),
+                          // Taken button
+                          Expanded(
+                            child: ElevatedButton.icon(
+                              onPressed: _handleTaken,
+                              icon: const Icon(Icons.check_circle),
+                              label: const Text('TAKEN'),
+                              style: ElevatedButton.styleFrom(
+                                backgroundColor: Colors.green,
+                                foregroundColor: Colors.white,
+                                padding:
+                                    const EdgeInsets.symmetric(vertical: 20),
+                                textStyle: const TextStyle(
+                                  fontSize: 18,
+                                  fontWeight: FontWeight.bold,
+                                ),
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 16),
+                      // Missed / Can't Take button below
+                      SizedBox(
+                        width: double.infinity,
                         child: ElevatedButton.icon(
-                          onPressed: _handleSnooze,
-                          icon: const Icon(Icons.schedule),
-                          label: const Text('SNOOZE\n5 MIN'),
+                          onPressed: _handleMissed,
+                          icon: const Icon(Icons.close),
+                          label: const Text('MISSED'),
                           style: ElevatedButton.styleFrom(
-                            backgroundColor: Colors.orange,
+                            backgroundColor: Colors.red,
                             foregroundColor: Colors.white,
                             padding: const EdgeInsets.symmetric(vertical: 20),
                             textStyle: const TextStyle(
@@ -228,25 +326,8 @@ class _AlarmRingScreenState extends State<AlarmRingScreen>
                           ),
                         ),
                       ),
-                      const SizedBox(width: 16),
-                      Expanded(
-                        child: ElevatedButton.icon(
-                          onPressed: _handleTaken,
-                          icon: const Icon(Icons.check_circle),
-                          label: const Text('TAKEN'),
-                          style: ElevatedButton.styleFrom(
-                            backgroundColor: Colors.green,
-                            foregroundColor: Colors.white,
-                            padding: const EdgeInsets.symmetric(vertical: 20),
-                            textStyle: const TextStyle(
-                              fontSize: 18,
-                              fontWeight: FontWeight.bold,
-                            ),
-                          ),
-                        ),
-                      ),
                     ],
-                  ),
+                  )
                 ],
               ),
             ),
@@ -256,5 +337,3 @@ class _AlarmRingScreenState extends State<AlarmRingScreen>
     );
   }
 }
-
-
