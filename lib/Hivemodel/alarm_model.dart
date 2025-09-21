@@ -45,11 +45,12 @@ class AlarmModel extends HiveObject {
   String medicineName;
   @HiveField(13)
   String dosage;
-
+  @HiveField(14)
+  int? snoozeId;
   AlarmModel({
     required this.id,
     required this.title,
-    required this.description,
+    String? description,
     required this.dosage,
     required this.hour,
     required this.minute,
@@ -62,7 +63,8 @@ class AlarmModel extends HiveObject {
     this.lastAction,
     this.lastActionTime,
   })  : selectedDays = selectedDays ?? List.filled(7, true),
-        createdAt = createdAt ?? DateTime.now();
+        createdAt = createdAt ?? DateTime.now(),
+        description = description ?? "";
 
   String get timeString =>
       '${hour.toString().padLeft(2, '0')}:${minute.toString().padLeft(2, '0')}';

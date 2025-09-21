@@ -1,9 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:hive_flutter/hive_flutter.dart';
+import 'package:intl/intl.dart';
 
 import '../Hivemodel/history_entry.dart';
 import '../Hivemodel/medicine.dart';
 import '../services/hive_services.dart';
+
 
 class HistoryPage extends StatefulWidget {
   const HistoryPage({super.key});
@@ -13,6 +15,8 @@ class HistoryPage extends StatefulWidget {
 }
 
 class _HistoryPageState extends State<HistoryPage> {
+  String selectedFilter = 'All';
+
   @override
   void initState() {
     super.initState();
@@ -30,9 +34,8 @@ class _HistoryPageState extends State<HistoryPage> {
 
     for (var med in medicines.values) {
       for (var time in med.dailyIntakeTimes) {
-        final doseKey = "${med.name}@$time@$todayKey";
+        final doseKey = "${med.name}_${time}_$todayKey";
 
-        // ✅ Only mark as missed if the dose time has already passed
         if (!history.containsKey(doseKey) && time.compareTo(currentTime) < 0) {
           history.put(
             doseKey,
@@ -47,15 +50,27 @@ class _HistoryPageState extends State<HistoryPage> {
     }
   }
 
-  String selectedFilter = 'All';
+  bool _filterEntry(HistoryEntry entry) {
+    switch (selectedFilter) {
+      case 'Taken':
+        return entry.status == 'taken';
+      case 'Late Taken':
+        return entry.status == 'takenLate';
+      case 'Missed':
+        return entry.status == 'missed';
+      default:
+        return true; // All
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        iconTheme: const IconThemeData(color: Colors.white),
-        title: const Text('History Log',
-            style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+        title: const Text(
+          'History Log',
+          style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
+        ),
         centerTitle: true,
         backgroundColor: Colors.green[700],
       ),
@@ -66,7 +81,7 @@ class _HistoryPageState extends State<HistoryPage> {
             padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 10),
             child: Row(
               mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-              children: ['All', 'Taken', 'Missed'].map((filter) {
+              children: ['All', 'Taken', 'Late Taken', 'Missed'].map((filter) {
                 final bool isSelected = selectedFilter == filter;
                 return ElevatedButton(
                   onPressed: () {
@@ -82,6 +97,7 @@ class _HistoryPageState extends State<HistoryPage> {
               }).toList(),
             ),
           ),
+
           // History List
           Expanded(
             child: ValueListenableBuilder(
@@ -106,16 +122,20 @@ class _HistoryPageState extends State<HistoryPage> {
                 return ListView(
                   children: sortedDates.map((date) {
                     // Filter by status
-                    final meds = grouped[date]!.where((entry) {
-                      if (selectedFilter == 'All') return true;
-                      if (selectedFilter == 'Taken')
-                        return entry.status == 'taken';
-                      if (selectedFilter == 'Missed')
-                        return entry.status != 'taken';
-                      return false;
-                    }).toList();
+                    final meds = grouped[date]!.where(_filterEntry).toList();
 
                     if (meds.isEmpty) return const SizedBox();
+
+                    // Sort by time ascending
+                    meds.sort((a, b) {
+                      String timeA = a.medicineName.contains('@')
+                          ? a.medicineName.split('@')[1]
+                          : '00:00';
+                      String timeB = b.medicineName.contains('@')
+                          ? b.medicineName.split('@')[1]
+                          : '00:00';
+                      return timeA.compareTo(timeB);
+                    });
 
                     return Padding(
                       padding: const EdgeInsets.all(8.0),
@@ -126,44 +146,99 @@ class _HistoryPageState extends State<HistoryPage> {
                           child: Column(
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
-                              Padding(
-                                padding: const EdgeInsets.all(3.0),
-                                child: Text(
-                                  "Date: " + date,
-                                  style: const TextStyle(
-                                      fontWeight: FontWeight.bold,
-                                      fontSize: 16),
-                                ),
+                              Text(
+                                "Date: $date",
+                                style: const TextStyle(
+                                    fontWeight: FontWeight.bold, fontSize: 16),
                               ),
                               const Divider(),
+                              // ...meds.map((entry) {
+                              //   String medName = entry.medicineName;
+                              //   String time = '';
+                              //   if (medName.contains('@')) {
+                              //     final parts = medName.split('@');
+                              //     medName = parts[0];
+                              //     time = parts.length > 1 ? parts[1] : '';
+                              //   }
+
+                              //   Color statusColor;
+                              //   String statusText;
+                              //   switch (entry.status) {
+                              //     case 'taken':
+                              //       statusColor = Colors.green;
+                              //       statusText = 'Taken';
+                              //       break;
+                              //     case 'takenLate':
+                              //       statusColor = Colors.orange;
+                              //       statusText = 'Late Taken';
+                              //       break;
+                              //     case 'missed':
+                              //     default:
+                              //       statusColor = Colors.red;
+                              //       statusText = 'Missed';
+                              //   }
+
+                              //   return ListTile(
+                              //     leading: Icon(Icons.medication,
+                              //         color: statusColor),
+                              //     title: Text(medName),
+                              //     subtitle:
+                              //         time.isNotEmpty ? Text("Time: $time") : null,
+                              //     trailing: Text(
+                              //       statusText,
+                              //       style: TextStyle(color: statusColor),
+                              //     ),
+                              //   );
+                              // }),
                               ...meds.map((entry) {
-                                // Split medicineName into name and time if needed
-                                String medName = entry.medicineName;
-                                String time = '';
-                                if (medName.contains('@')) {
-                                  final parts = medName.split('@');
-                                  medName = parts[0];
-                                  time = parts.length > 1 ? parts[1] : '';
-                                }
-                                return ListTile(
-                                  leading: Icon(Icons.medication,
-                                      color: entry.status == 'taken'
-                                          ? Colors.green
-                                          : Colors.red),
-                                  title: Text(medName),
-                                  subtitle: time.isNotEmpty
-                                      ? Text("Time: $time")
-                                      : null,
-                                  trailing: Text(
-                                      entry.status == 'taken'
-                                          ? 'Taken'
-                                          : 'Missed',
-                                      style: TextStyle(
-                                          color: entry.status == 'taken'
-                                              ? Colors.green
-                                              : Colors.red)),
-                                );
-                              }),
+  String medName = entry.medicineName;
+  String timeStr = '';
+  if (medName.contains('@')) {
+    final parts = medName.split('@');
+    medName = parts[0];
+    timeStr = parts.length > 1 ? parts[1] : '';
+  }
+
+  // Format time
+  String formattedTime = '';
+  if (timeStr.isNotEmpty) {
+    final parts = timeStr.split(':');
+    if (parts.length == 2) {
+      final hour = int.tryParse(parts[0]) ?? 0;
+      final minute = int.tryParse(parts[1]) ?? 0;
+      final dt = DateTime(0, 0, 0, hour, minute);
+      formattedTime = "${DateFormat.jm().format(dt)}"; // e.g., 8:30 AM
+    }
+  }
+
+  Color statusColor;
+  String statusText;
+  switch (entry.status) {
+    case 'taken':
+      statusColor = Colors.green;
+      statusText = 'Taken';
+      break;
+    case 'takenLate':
+      statusColor = Colors.orange;
+      statusText = 'Late Taken';
+      break;
+    case 'missed':
+    default:
+      statusColor = Colors.red;
+      statusText = 'Missed';
+  }
+
+  return ListTile(
+    leading: Icon(Icons.medication, color: statusColor),
+    title: Text(medName),
+    subtitle: formattedTime.isNotEmpty ? Text("Time: $formattedTime") : null,
+    trailing: Text(
+      statusText,
+      style: TextStyle(color: statusColor),
+    ),
+  );
+}),
+
                             ],
                           ),
                         ),
@@ -174,9 +249,7 @@ class _HistoryPageState extends State<HistoryPage> {
               },
             ),
           ),
-          SizedBox(
-            height: 50,
-          )
+          const SizedBox(height: 50),
         ],
       ),
     );

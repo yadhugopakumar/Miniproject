@@ -80,7 +80,12 @@
     <uses-permission android:name="android.permission.TURN_SCREEN_ON"/>
     <uses-permission android:name="android.permission.ACCESS_NOTIFICATION_POLICY" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MEDIA_PLAYBACK"/>
-
+   <queries>
+        <intent>
+            <action android:name="android.intent.action.VIEW" />
+            <data android:mimeType="*/*" />
+        </intent>
+    </queries>
     <application
         android:label="medremind"
         android:name="${applicationName}"

@@ -7,7 +7,10 @@ list(APPEND FLUTTER_PLUGIN_LIST
   audioplayers_windows
   file_selector_windows
   flutter_tts
+  pdfx
   permission_handler_windows
+  printing
+  share_plus
   url_launcher_windows
 )
 

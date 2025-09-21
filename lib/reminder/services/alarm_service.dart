@@ -1,5 +1,4 @@
 import 'package:alarm/alarm.dart';
-import 'package:flutter/foundation.dart';
 import 'package:hive_flutter/adapters.dart';
 import '../../Hivemodel/alarm_model.dart';
 import '../../Hivemodel/history_entry.dart';
@@ -63,98 +62,235 @@ class AlarmService {
       await NotificationService.cancelAlarm(alarm.id);
     }
   }
+// static Future<void> updateHistoryStatus(
+//   String medicineNameWithTime, // e.g. "Paracetamol@08:00"
+//   String status, {
+//   int snoozeCount = 0,
+// }) async {
+//   final historyBox = Hive.box<HistoryEntry>('historyBox');
+//   final now = DateTime.now();
+//   final todayKey =
+//       "${medicineNameWithTime}_${now.year}-${now.month}-${now.day}"; // ✅ same format as manual marking
 
+//   HistoryEntry? entry;
+//   if (historyBox.containsKey(todayKey)) {
+//     // update existing entry
+//     entry = historyBox.get(todayKey);
+//     entry!.status = status;
+//     entry.time =
+//         "${now.hour.toString().padLeft(2, '0')}:${now.minute.toString().padLeft(2, '0')}";
+//     entry.snoozeCount = snoozeCount;
+//     await entry.save();
+//   } else {
+//     // create new entry if not exists
+//     entry = HistoryEntry(
+//       date: now,
+//       medicineName: medicineNameWithTime,
+//       status: status,
+//       time:
+//           "${now.hour.toString().padLeft(2, '0')}:${now.minute.toString().padLeft(2, '0')}",
+//       snoozeCount: snoozeCount,
+//     );
+//     await historyBox.put(todayKey, entry);
+//   }
+
+//   print("✅ History updated: $todayKey → $status, snooze=$snoozeCount");
+// }
   static Future<void> updateHistoryStatus(
-      String medicineName, String status) async {
+    String medicineName, // e.g. "Paracetamol"
+    String time, // e.g. "08:00"
+    String status, {
+    int snoozeCount = 0,
+  }) async {
     final historyBox = Hive.box<HistoryEntry>('historyBox');
-    final today = DateTime.now();
-    final todayKey = "$medicineName-${today.year}-${today.month}-${today.day}";
-
     final now = DateTime.now();
-    final entry = HistoryEntry(
-      date: today,
-      medicineName: medicineName,
-      status: status,
-      time:
-          "${now.hour.toString().padLeft(2, '0')}:${now.minute.toString().padLeft(2, '0')}",
-    );
 
-    await historyBox.put(todayKey, entry);
-  }
+    // ✅ Use the same key format as homepage
+    final key = '${medicineName}@${time}_${now.year}-${now.month}-${now.day}';
 
-  static Future snoozeAlarm(AlarmModel alarm) async {
-    await Alarm.stop(alarm.id);
-    // CANCEL BACKUP NOTIFICATION
-    await NotificationService.cancelAlarm(alarm.id);
-
-    // LOG SNOOZE ACTION
-    alarm.lastAction = 'snoozed';
-    alarm.lastActionTime = DateTime.now();
-
-    await box.put(alarm.id, alarm);
-    updateHistoryStatus(alarm.medicineName, "snoozed");
-
-    // Schedule snooze
-    final snoozeTime = DateTime.now().add(const Duration(minutes: 5));
-    final snoozeSettings = AlarmSettings(
-      id: alarm.id + 10000,
-      dateTime: snoozeTime,
-      assetAudioPath: 'sounds/alarm.mp3',
-      loopAudio: true,
-      vibrate: false,
-      fadeDuration: 3.0,
-      notificationTitle: '${alarm.title} (Snoozed)',
-      notificationBody: alarm.description,
-      enableNotificationOnKill: true,
-    );
-    await Alarm.set(alarmSettings: snoozeSettings);
-    if (alarm.isRepeating) {
-      await _scheduleAlarm(alarm);
-    }
-  }
-
-  static Future dismissAlarm(AlarmModel alarm) async {
-    await Alarm.stop(alarm.id);
-    await Alarm.stop(alarm.id + 10000);
-    // CANCEL BACKUP NOTIFICATION
-    await NotificationService.cancelAlarm(alarm.id);
-
-    // LOG TAKEN ACTION
-    alarm.lastAction = 'taken';
-    alarm.lastActionTime = DateTime.now();
-
-    await box.put(alarm.id, alarm);
-    if (alarm.lastTriggered != null &&
-        DateTime.now().difference(alarm.lastTriggered!).inMinutes > 30) {
-      updateHistoryStatus(alarm.medicineName, "lateTaken");
+    HistoryEntry? entry;
+    if (historyBox.containsKey(key)) {
+      // update existing entry
+      entry = historyBox.get(key);
+      entry!.status = status;
+      entry.time =
+          "${now.hour.toString().padLeft(2, '0')}:${now.minute.toString().padLeft(2, '0')}";
+      entry.snoozeCount = snoozeCount;
+      await entry.save();
     } else {
-      updateHistoryStatus(alarm.medicineName, "taken");
+      // create new entry if not exists
+      entry = HistoryEntry(
+        date: now,
+        medicineName: "${medicineName}@${time}",
+        status: status,
+        time:
+            "${now.hour.toString().padLeft(2, '0')}:${now.minute.toString().padLeft(2, '0')}",
+        snoozeCount: snoozeCount,
+      );
+      await historyBox.put(key, entry);
     }
 
-    if (alarm.isRepeating) {
-      await _scheduleAlarm(alarm);
-    } else {
-      alarm.isActive = false;
+    print("✅ History updated: $key → $status, snooze=$snoozeCount");
+  }
+
+  static Future<void> snoozeAlarm(AlarmModel alarm) async {
+    try {
+      print('🔔 Snoozing alarm id: ${alarm.id}');
+
+      // Stop any existing snooze alarm
+      if (alarm.snoozeId != null) {
+        print('⏹ Stopping previous snooze id: ${alarm.snoozeId}');
+        await Alarm.stop(alarm.snoozeId!);
+        await box.delete(alarm.snoozeId!); // remove old snooze from Hive
+      }
+
+      // Cancel main notification if needed
+      await NotificationService.cancelAlarm(alarm.id);
+
+      // Assign a new snooze ID
+      final snoozeId = alarm.id + 10000;
+      alarm.snoozeId = snoozeId;
+
+      // Update history
+      print('📝 Updating history for snooze');
+      final time =
+          '${alarm.hour.toString().padLeft(2, '0')}:${alarm.minute.toString().padLeft(2, '0')}';
+      await updateHistoryStatus(alarm.medicineName, time, "snoozed",
+          snoozeCount: 1);
+
+      // Update alarm model
+      alarm.lastAction = 'snoozed';
+      alarm.lastActionTime = DateTime.now();
       await box.put(alarm.id, alarm);
+
+      // Create a separate AlarmModel for snooze so getAlarmById works
+      final snoozeAlarm = AlarmModel(
+        id: snoozeId,
+        medicineName: alarm.medicineName,
+        dosage: alarm.dosage,
+        title: alarm.title,
+        description: alarm.description,
+        hour: DateTime.now().hour,
+        minute: DateTime.now().minute,
+        isRepeating: false,
+      );
+      await box.put(snoozeId, snoozeAlarm);
+
+      // Schedule snooze alarm
+      final snoozeTime =
+          DateTime.now().add(const Duration(minutes: 1)); // change as needed
+      print('⏰ Scheduling snooze for $snoozeTime with id $snoozeId');
+
+      await Alarm.set(
+        alarmSettings: AlarmSettings(
+          id: snoozeId,
+          dateTime: snoozeTime,
+          assetAudioPath: '', // sound handled in AlarmRingScreen
+          notificationTitle: '${alarm.title} (Snoozed)', // required
+          notificationBody: alarm.description, // required
+          loopAudio: true,
+          vibrate: false,
+          enableNotificationOnKill: true,
+          androidFullScreenIntent: true,
+        ),
+      );
+
+      print('✅ Snooze scheduled successfully');
+
+      // Schedule next main alarm if repeating
+      if (alarm.isRepeating) {
+        print('📅 Scheduling main alarm for next repetition');
+        await _scheduleAlarm(alarm);
+      }
+    } catch (e, s) {
+      print('❌ Error in snoozeAlarm: $e');
+      print(s);
     }
   }
 
-  static Future _scheduleAlarm(AlarmModel alarm) async {
-    if (!alarm.isActive) return;
+  static Future<void> dismissAlarm(AlarmModel alarm) async {
+    try {
+      print('✅ Dismissing alarm id: ${alarm.id}');
+
+      // Stop main and snooze alarms
+      await Alarm.stop(alarm.id);
+      if (alarm.snoozeId != null) {
+        print('⏹ Stopping snooze id: ${alarm.snoozeId}');
+        await Alarm.stop(alarm.snoozeId!);
+        alarm.snoozeId = null;
+      }
+
+      // Cancel notifications
+      await NotificationService.cancelAlarm(alarm.id);
+
+      // Update history
+      final now = DateTime.now();
+//       if (alarm.lastAction == 'snoozed' && alarm.lastActionTime != null) {
+//         final diffMinutes = now.difference(alarm.lastActionTime!).inMinutes;
+//         final snoozeCount = (diffMinutes / 5).ceil();
+//         print('📝 Updating history: takenLate, snoozeCount=$snoozeCount');
+//        final time = '${alarm.hour.toString().padLeft(2,'0')}:${alarm.minute.toString().padLeft(2,'0')}';
+// await updateHistoryStatus(alarm.medicineName, time, "taken");
+
+//       } else {
+//         print('📝 Updating history: taken');
+//        final time = '${alarm.hour.toString().padLeft(2,'0')}:${alarm.minute.toString().padLeft(2,'0')}';
+// await updateHistoryStatus(alarm.medicineName, time, "taken");
+
+//       }
+      final time =
+          '${alarm.hour.toString().padLeft(2, '0')}:${alarm.minute.toString().padLeft(2, '0')}';
+
+      if (alarm.lastAction == 'snoozed' && alarm.lastActionTime != null) {
+        final diffMinutes = now.difference(alarm.lastActionTime!).inMinutes;
+        final snoozeCount = (diffMinutes / 5).ceil();
+        print('📝 Updating history: takenLate, snoozeCount=$snoozeCount');
+        await updateHistoryStatus(alarm.medicineName, time, "takenLate",
+            snoozeCount: snoozeCount);
+      } else {
+        print('📝 Updating history: taken');
+        await updateHistoryStatus(alarm.medicineName, time, "taken");
+      }
+
+      // Update alarm model
+      alarm.lastAction = 'taken';
+      alarm.lastActionTime = now;
+      await box.put(alarm.id, alarm);
+
+      // Schedule next alarm if repeating
+      if (alarm.isRepeating) {
+        print('📅 Scheduling next main alarm for repetition');
+        await _scheduleAlarm(alarm);
+      } else {
+        alarm.isActive = false;
+        await box.put(alarm.id, alarm);
+        print('⏹ Alarm deactivated');
+      }
+    } catch (e, s) {
+      print('❌ Error in dismissAlarm: $e');
+      print(s);
+    }
+  }
+
+  static Future<void> _scheduleAlarm(AlarmModel alarm) async {
+    if (!alarm.isActive) {
+      print('⏹ Alarm id ${alarm.id} is inactive, skipping schedule');
+      return;
+    }
 
     final now = DateTime.now();
     DateTime nextAlarm =
         DateTime(now.year, now.month, now.day, alarm.hour, alarm.minute);
-    if (nextAlarm.isBefore(now)) {
+    if (nextAlarm.isBefore(now))
       nextAlarm = nextAlarm.add(const Duration(days: 1));
-    }
 
     try {
+      print('⏰ Scheduling main alarm id ${alarm.id} at $nextAlarm');
       await Alarm.set(
         alarmSettings: AlarmSettings(
           id: alarm.id,
           dateTime: nextAlarm,
-          assetAudioPath: 'sounds/alarm.mp3',
+          assetAudioPath: 'sounds/alarm2.mp3',
           loopAudio: true,
           vibrate: false,
           fadeDuration: 3.0,
@@ -164,12 +300,14 @@ class AlarmService {
         ),
       );
 
-      if (kDebugMode) print('✅ Main alarm scheduled: $nextAlarm');
+      print('✅ Main alarm scheduled: $nextAlarm');
 
-      // backup schedule
+      // Backup
       await NotificationService.scheduleBackupAlarm(alarm);
-    } catch (e) {
-      if (kDebugMode) print('❌ Error scheduling alarm: $e');
+      print('🔔 Backup notification scheduled');
+    } catch (e, s) {
+      print('❌ Error scheduling main alarm: $e');
+      print(s);
     }
   }
 

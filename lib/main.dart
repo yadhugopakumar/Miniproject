@@ -71,6 +71,7 @@ import 'package:medremind/pages/auth/loginpage.dart';
 import 'package:medremind/pages/auth/pinlogin.dart';
 import 'package:medremind/reminder/alarmscreen.dart';
 import 'package:medremind/reminder/services/notification_service.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import 'Hivemodel/chat_message.dart';
@@ -91,6 +92,7 @@ Future<void> main() async {
   // Initialize Alarm package and AlarmService
   await Alarm.init();
   await AlarmService.init();
+  await SharedPreferences.getInstance();
   await NotificationService.init(); // ✅ initialize here
 
   // Register adapters only if not already registered
