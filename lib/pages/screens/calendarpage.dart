@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:hive_flutter/hive_flutter.dart';
 import 'package:medremind/pages/screens/pdfviewerpage.dart';
 import 'package:table_calendar/table_calendar.dart';
+import 'package:intl/intl.dart';
 
 import '../../Hivemodel/history_entry.dart';
 import '../../Hivemodel/medicine.dart';
@@ -15,6 +16,8 @@ class Calendarpage extends StatefulWidget {
 }
 
 class _CalendarpageState extends State<Calendarpage> {
+  bool _isExporting = false; // loading flag
+
   CalendarFormat _calendarFormat = CalendarFormat.month;
 
   DateTime _focusedDay = DateTime.now();
@@ -39,13 +42,32 @@ class _CalendarpageState extends State<Calendarpage> {
     }
   }
 
-  List<Map<String, String>> _getMedicinesForDay(DateTime day) {
+  // List<Map<String, String>> _getMedicinesForDay(DateTime day) {
+  //   final historyBox = Hive.isBoxOpen('historyBox')
+  //       ? Hive.box<HistoryEntry>('historyBox')
+  //       : null;
+  //   if (historyBox == null) {
+  //     return [];
+  //   }
+  //   final selectedDate = DateTime(day.year, day.month, day.day);
+
+  //   return historyBox.values
+  //       .where((entry) =>
+  //           entry.date.year == selectedDate.year &&
+  //           entry.date.month == selectedDate.month &&
+  //           entry.date.day == selectedDate.day)
+  //       .map((entry) => {
+  //             'name': entry.medicineName,
+  //             'status': entry.status,
+  //           })
+  //       .toList();
+  // }
+  List<Map<String, dynamic>> _getMedicinesForDay(DateTime day) {
     final historyBox = Hive.isBoxOpen('historyBox')
         ? Hive.box<HistoryEntry>('historyBox')
         : null;
-    if (historyBox == null) {
-      return [];
-    }
+    if (historyBox == null) return [];
+
     final selectedDate = DateTime(day.year, day.month, day.day);
 
     return historyBox.values
@@ -56,6 +78,8 @@ class _CalendarpageState extends State<Calendarpage> {
         .map((entry) => {
               'name': entry.medicineName,
               'status': entry.status,
+              'time':
+                  DateFormat('hh:mm a').format(entry.date), // formatted time
             })
         .toList();
   }
@@ -94,38 +118,66 @@ class _CalendarpageState extends State<Calendarpage> {
                     mainAxisSize: MainAxisSize.max,
                     children: [
                       ElevatedButton(
-                        onPressed: () async {
-                          final file =
-                              await generateMonthlyReportPdf(); // returns File
-                          if (file != null) {
-                            print(file.path);
-                            Navigator.push(
-                              context,
-                              MaterialPageRoute(
-                                builder: (_) => PdfViewPage(
-                                    path: file.path), // use file.path
-                              ),
-                            );
-                          }
-                        },
+                        onPressed: _isExporting
+                            ? null // disable button while exporting
+                            : () async {
+                                setState(
+                                    () => _isExporting = true); // start loading
+
+                                try {
+                                  final file = await generateMonthlyReportPdf(
+                                      selectedMonth: _focusedDay);
+                                  if (file != null) {
+                                    Navigator.push(
+                                      context,
+                                      MaterialPageRoute(
+                                        builder: (_) =>
+                                            PdfViewPage(filePath: file.path),
+                                      ),
+                                    );
+                                  }
+                                } finally {
+                                  setState(() =>
+                                      _isExporting = false); // stop loading
+                                }
+                              },
                         style: ElevatedButton.styleFrom(
                           backgroundColor:
                               const Color.fromARGB(255, 58, 104, 79),
                           shape: RoundedRectangleBorder(
                             borderRadius: BorderRadius.circular(12),
                           ),
-                          padding: const EdgeInsets.symmetric(vertical: 14),
+                          padding: const EdgeInsets.symmetric(vertical: 10),
                         ),
-                        child: const Padding(
-                          padding: EdgeInsets.symmetric(
+                        child: Padding(
+                          padding: const EdgeInsets.symmetric(
                               vertical: 3.0, horizontal: 20),
-                          child: Row(
-                            children: <Widget>[
-                              Icon(Icons.file_download, color: Colors.white),
-                              SizedBox(width: 10),
-                              Text("Export this month History"),
-                            ],
-                          ),
+                          child: _isExporting
+                              ? Row(
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: const [
+                                    SizedBox(
+                                      height: 20,
+                                      width: 20,
+                                      child: CircularProgressIndicator(
+                                        color: Colors.white,
+                                        strokeWidth: 2,
+                                      ),
+                                    ),
+                                    SizedBox(width: 10),
+                                    Text("Generating...",
+                                        style: TextStyle(color: Colors.white)),
+                                  ],
+                                )
+                              : Row(
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: const [
+                                    Icon(Icons.file_download,
+                                        color: Colors.white),
+                                    SizedBox(width: 10),
+                                    Text("Export this month History"),
+                                  ],
+                                ),
                         ),
                       ),
                     ],
@@ -294,11 +346,18 @@ class _CalendarpageState extends State<Calendarpage> {
                                   fontWeight: FontWeight.bold,
                                   color: Colors.black),
                             ),
+                            subtitle: med.containsKey('time')
+                                ? Text(
+                                    "Time: ${med['time']!}",
+                                    style: const TextStyle(
+                                        fontWeight: FontWeight.w500),
+                                  )
+                                : null,
                             trailing: Container(
                               padding: const EdgeInsets.symmetric(
                                   horizontal: 12, vertical: 6),
                               decoration: BoxDecoration(
-                                color: med['status'] == 'taken'
+                                color: med['status']!.toLowerCase() == 'taken'
                                     ? const Color.fromARGB(255, 121, 255, 125)
                                     : const Color.fromARGB(255, 255, 128, 69),
                                 borderRadius: BorderRadius.circular(20),
