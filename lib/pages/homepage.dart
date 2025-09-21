@@ -284,32 +284,41 @@ class _HomepageStateContent extends State<Homepage> {
 
                         if (confirm != true) return;
 
-                        final now = DateTime.now();
+                        final todayKey =
+                            '${today.year}-${today.month}-${today.day}';
                         final doseKey =
-                            '${sched.medicine.name}@${sched.time}_${now.year}-${now.month}-${now.day}';
+                            '${sched.medicine.name}@${sched.time}_$todayKey';
+
+                        final existingEntry = historyBox.get(doseKey);
 
                         String newStatus;
                         if (status == 'missed') {
-                          newStatus =
-                              'takenLate'; // first time marking a missed dose
+                          newStatus = 'takenLate';
                         } else if (status == 'takenLate') {
-                          newStatus = 'Late Taken'; // confirm late
-                        } else if (status == 'taken') {
-                          newStatus = 'taken'; // already taken, confirmation
+                          newStatus =
+                              'takenLate'; // or 'taken', depending on your logic
                         } else {
-                          newStatus = 'taken'; // normal take
+                          newStatus = 'taken';
                         }
 
-                        await historyBox.put(
-                          doseKey,
-                          HistoryEntry(
-                            date: now,
-                            time: sched.time,
-                            medicineName:
-                                "${sched.medicine.name}@${sched.time}",
-                            status: newStatus,
-                          ),
-                        );
+                        if (existingEntry != null) {
+                          existingEntry.status = newStatus;
+                          existingEntry.time =
+                              "${DateTime.now().hour.toString().padLeft(2, '0')}:${DateTime.now().minute.toString().padLeft(2, '0')}";
+                          await existingEntry.save();
+                        } else {
+                          await historyBox.put(
+                            doseKey,
+                            HistoryEntry(
+                              medicineId: sched.medicine.id,
+                              date: today,
+                              time: sched.time,
+                              medicineName:
+                                  "${sched.medicine.name}@${sched.time}",
+                              status: newStatus,
+                            ),
+                          );
+                        }
 
                         if (newStatus == 'taken') {
                           final dose = int.tryParse(sched.medicine.dosage) ?? 1;
@@ -334,170 +343,175 @@ class _HomepageStateContent extends State<Homepage> {
     );
   }
 
-Widget _buildAppBar() {
-  return SliverAppBar(
-    leading: Builder(
-      builder: (context) => IconButton(
-        icon: const Icon(Icons.menu, color: Colors.white),
-        onPressed: () => Scaffold.of(context).openDrawer(),
-      ),
-    ),
-    actions: [
-      ValueListenableBuilder(
-        valueListenable: Hive.box<Medicine>('medicinesBox').listenable(),
-        builder: (context, box, _) {
-          final meds = box.values.toList();
-          final today = DateTime.now();
-
-          List<Map<String, dynamic>> allNotifs = [];
-
-          // Low stock & expiry
-          for (var med in meds) {
-            if (med.quantityLeft <= med.refillThreshold) {
-              allNotifs.add({
-                "id": "med_stock_${med.key}",
-                "title": med.name,
-                "subtitle": "Low stock: ${med.quantityLeft} left",
-                "icon": Icons.medication_liquid,
-                "color": Colors.blue,
-              });
-            }
-            if (med.expiryDate.isBefore(today.add(const Duration(days: 7)))) {
-              allNotifs.add({
-                "id": "med_expiry_${med.key}",
-                "title": med.name,
-                "subtitle":
-                    "Expiring on: ${med.expiryDate.toLocal().toString().split(' ')[0]}",
-                "icon": Icons.warning,
-                "color": Colors.red,
-              });
-            }
-          }
-
-          // Health checkup at start or end of month
-          if (today.day == 1 ||
-              today.day == DateTime(today.year, today.month + 1, 0).day) {
-            allNotifs.add({
-              "id": "extra_checkup",
-              "title": "It’s time for your monthly health checkup! 🩺",
-              "subtitle": "",
-              "icon": Icons.health_and_safety,
-              "color": Colors.green,
-            });
-          }
-
-          return badges.Badge(
-            position: badges.BadgePosition.topEnd(top: 3, end: 5),
-            showBadge: allNotifs.isNotEmpty,
-            badgeContent: Text(
-              allNotifs.length.toString(),
-              style: const TextStyle(color: Colors.white, fontSize: 16),
-            ),
-            child: IconButton(
-              icon: const Icon(Icons.notifications, color: Colors.white,size: 30,),
-              onPressed: () async {
-                await showDialog(
-                  context: context,
-                  builder: (_) {
-                    // Keep list mutable inside dialog
-                    List<Map<String, dynamic>> dialogNotifs =
-                        List.from(allNotifs);
-
-                    return StatefulBuilder(
-                      builder: (context, setState) {
-                        return AlertDialog(
-                          shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(12)),
-                          backgroundColor:
-                              const Color.fromARGB(255, 233, 251, 255),
-                          title: const Text(
-                            "Notifications",
-                            style: TextStyle(fontWeight: FontWeight.bold),
-                          ),
-                          content: SizedBox(
-                            width: double.maxFinite,
-                            child: dialogNotifs.isEmpty
-                                ? const Text("No notifications 🎉")
-                                : ListView.builder(
-                                    shrinkWrap: true,
-                                    itemCount: dialogNotifs.length,
-                                    itemBuilder: (context, index) {
-                                      final notif = dialogNotifs[index];
-                                      return Dismissible(
-                                        key: ValueKey(notif["id"]),
-                                        direction: DismissDirection.endToStart,
-                                        onDismissed: (_) {
-                                          setState(() {
-                                            dialogNotifs.removeAt(index);
-                                          });
-                                        },
-                                        background: Container(
-                                          color: Colors.red,
-                                          alignment: Alignment.centerRight,
-                                          padding: const EdgeInsets.symmetric(
-                                              horizontal: 20),
-                                          child: const Icon(Icons.delete,
-                                              color: Colors.white),
-                                        ),
-                                        child: ListTile(
-                                          leading: Icon(
-                                            notif["icon"] as IconData,
-                                            color: notif["color"] as Color,
-                                          ),
-                                          title: Text(
-                                            notif["title"].toString(),
-                                            style: const TextStyle(
-                                                fontWeight: FontWeight.bold),
-                                          ),
-                                          subtitle: notif["subtitle"]
-                                                  .toString()
-                                                  .isNotEmpty
-                                              ? Text(notif["subtitle"]
-                                                  .toString())
-                                              : null,
-                                        ),
-                                      );
-                                    },
-                                  ),
-                          ),
-                          actions: [
-                            TextButton(
-                              onPressed: () => Navigator.pop(context),
-                              child: const Text("Close"),
-                            ),
-                          ],
-                        );
-                      },
-                    );
-                  },
-                );
-              },
-            ),
-          );
-        },
-      ),
-    ],
-    pinned: true,
-    expandedHeight: 60.0,
-    backgroundColor: Colors.green[800],
-    elevation: 0,
-    centerTitle: true,
-    flexibleSpace: const FlexibleSpaceBar(
-      stretchModes: [StretchMode.zoomBackground],
-      expandedTitleScale: 1.8,
-      title: Text(
-        'MedRemind',
-        style: TextStyle(
-          color: Colors.white,
-          fontSize: 18,
-          fontWeight: FontWeight.bold,
-          letterSpacing: 1.2,
+  Widget _buildAppBar() {
+    return SliverAppBar(
+      leading: Builder(
+        builder: (context) => IconButton(
+          icon: const Icon(Icons.menu, color: Colors.white),
+          onPressed: () => Scaffold.of(context).openDrawer(),
         ),
       ),
-      titlePadding: EdgeInsets.only(left: 60, bottom: 18),
-    ),
-  );
-}
+      actions: [
+        ValueListenableBuilder(
+          valueListenable: Hive.box<Medicine>('medicinesBox').listenable(),
+          builder: (context, box, _) {
+            final meds = box.values.toList();
+            final today = DateTime.now();
+
+            List<Map<String, dynamic>> allNotifs = [];
+
+            // Low stock & expiry
+            for (var med in meds) {
+              if (med.quantityLeft <= med.refillThreshold) {
+                allNotifs.add({
+                  "id": "med_stock_${med.key}",
+                  "title": med.name,
+                  "subtitle": "Low stock: ${med.quantityLeft} left",
+                  "icon": Icons.medication_liquid,
+                  "color": Colors.blue,
+                });
+              }
+              if (med.expiryDate.isBefore(today.add(const Duration(days: 7)))) {
+                allNotifs.add({
+                  "id": "med_expiry_${med.key}",
+                  "title": med.name,
+                  "subtitle":
+                      "Expiring on: ${med.expiryDate.toLocal().toString().split(' ')[0]}",
+                  "icon": Icons.warning,
+                  "color": Colors.red,
+                });
+              }
+            }
+
+            // Health checkup at start or end of month
+            if (today.day == 1 ||
+                today.day == DateTime(today.year, today.month + 1, 0).day) {
+              allNotifs.add({
+                "id": "extra_checkup",
+                "title": "It’s time for your monthly health checkup! 🩺",
+                "subtitle": "",
+                "icon": Icons.health_and_safety,
+                "color": Colors.green,
+              });
+            }
+
+            return badges.Badge(
+              position: badges.BadgePosition.topEnd(top: 3, end: 5),
+              showBadge: allNotifs.isNotEmpty,
+              badgeContent: Text(
+                allNotifs.length.toString(),
+                style: const TextStyle(color: Colors.white, fontSize: 16),
+              ),
+              child: IconButton(
+                icon: const Icon(
+                  Icons.notifications,
+                  color: Colors.white,
+                  size: 30,
+                ),
+                onPressed: () async {
+                  await showDialog(
+                    context: context,
+                    builder: (_) {
+                      // Keep list mutable inside dialog
+                      List<Map<String, dynamic>> dialogNotifs =
+                          List.from(allNotifs);
+
+                      return StatefulBuilder(
+                        builder: (context, setState) {
+                          return AlertDialog(
+                            shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(12)),
+                            backgroundColor:
+                                const Color.fromARGB(255, 233, 251, 255),
+                            title: const Text(
+                              "Notifications",
+                              style: TextStyle(fontWeight: FontWeight.bold),
+                            ),
+                            content: SizedBox(
+                              width: double.maxFinite,
+                              child: dialogNotifs.isEmpty
+                                  ? const Text("No notifications 🎉")
+                                  : ListView.builder(
+                                      shrinkWrap: true,
+                                      itemCount: dialogNotifs.length,
+                                      itemBuilder: (context, index) {
+                                        final notif = dialogNotifs[index];
+                                        return Dismissible(
+                                          key: ValueKey(notif["id"]),
+                                          direction:
+                                              DismissDirection.endToStart,
+                                          onDismissed: (_) {
+                                            setState(() {
+                                              dialogNotifs.removeAt(index);
+                                            });
+                                          },
+                                          background: Container(
+                                            color: Colors.red,
+                                            alignment: Alignment.centerRight,
+                                            padding: const EdgeInsets.symmetric(
+                                                horizontal: 20),
+                                            child: const Icon(Icons.delete,
+                                                color: Colors.white),
+                                          ),
+                                          child: ListTile(
+                                            leading: Icon(
+                                              notif["icon"] as IconData,
+                                              color: notif["color"] as Color,
+                                            ),
+                                            title: Text(
+                                              notif["title"].toString(),
+                                              style: const TextStyle(
+                                                  fontWeight: FontWeight.bold),
+                                            ),
+                                            subtitle: notif["subtitle"]
+                                                    .toString()
+                                                    .isNotEmpty
+                                                ? Text(notif["subtitle"]
+                                                    .toString())
+                                                : null,
+                                          ),
+                                        );
+                                      },
+                                    ),
+                            ),
+                            actions: [
+                              TextButton(
+                                onPressed: () => Navigator.pop(context),
+                                child: const Text("Close"),
+                              ),
+                            ],
+                          );
+                        },
+                      );
+                    },
+                  );
+                },
+              ),
+            );
+          },
+        ),
+      ],
+      pinned: true,
+      expandedHeight: 60.0,
+      backgroundColor: Colors.green[800],
+      elevation: 0,
+      centerTitle: true,
+      flexibleSpace: const FlexibleSpaceBar(
+        stretchModes: [StretchMode.zoomBackground],
+        expandedTitleScale: 1.8,
+        title: Text(
+          'MedRemind',
+          style: TextStyle(
+            color: Colors.white,
+            fontSize: 18,
+            fontWeight: FontWeight.bold,
+            letterSpacing: 1.2,
+          ),
+        ),
+        titlePadding: EdgeInsets.only(left: 60, bottom: 18),
+      ),
+    );
+  }
 
   Widget _buildProgressBar(double progress, int taken, int total) {
     return Container(

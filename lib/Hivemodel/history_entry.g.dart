@@ -22,6 +22,7 @@ class HistoryEntryAdapter extends TypeAdapter<HistoryEntry> {
       status: fields[2] as String,
       time: fields[3] as String?,
       snoozeCount: fields[4] as int,
+      medicineId: fields[5] as String,
     );
   }
 

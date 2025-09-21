@@ -14,14 +14,19 @@ class HistoryEntry extends HiveObject {
 
   @HiveField(3)
   String? time; // 'taken' or 'skipped'
+
   @HiveField(4)
   int snoozeCount; // NEW: number of 5-min snoozes
 
+ @HiveField(5)
+  String medicineId; // NEW: store Medicine.id for syncing
+  
   HistoryEntry({
     required this.date,
     required this.medicineName,
     required this.status,
     this.time,
     this.snoozeCount = 0,
+    required this.medicineId,
   });
 }

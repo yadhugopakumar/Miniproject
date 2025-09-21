@@ -42,26 +42,6 @@ class _CalendarpageState extends State<Calendarpage> {
     }
   }
 
-  // List<Map<String, String>> _getMedicinesForDay(DateTime day) {
-  //   final historyBox = Hive.isBoxOpen('historyBox')
-  //       ? Hive.box<HistoryEntry>('historyBox')
-  //       : null;
-  //   if (historyBox == null) {
-  //     return [];
-  //   }
-  //   final selectedDate = DateTime(day.year, day.month, day.day);
-
-  //   return historyBox.values
-  //       .where((entry) =>
-  //           entry.date.year == selectedDate.year &&
-  //           entry.date.month == selectedDate.month &&
-  //           entry.date.day == selectedDate.day)
-  //       .map((entry) => {
-  //             'name': entry.medicineName,
-  //             'status': entry.status,
-  //           })
-  //       .toList();
-  // }
   List<Map<String, dynamic>> _getMedicinesForDay(DateTime day) {
     final historyBox = Hive.isBoxOpen('historyBox')
         ? Hive.box<HistoryEntry>('historyBox')

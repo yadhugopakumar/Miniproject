@@ -6,7 +6,6 @@ import '../Hivemodel/history_entry.dart';
 import '../Hivemodel/medicine.dart';
 import '../services/hive_services.dart';
 
-
 class HistoryPage extends StatefulWidget {
   const HistoryPage({super.key});
 
@@ -34,12 +33,13 @@ class _HistoryPageState extends State<HistoryPage> {
 
     for (var med in medicines.values) {
       for (var time in med.dailyIntakeTimes) {
-        final doseKey = "${med.name}_${time}_$todayKey";
+        final doseKey = "${med.name}@${time}_$todayKey";
 
         if (!history.containsKey(doseKey) && time.compareTo(currentTime) < 0) {
           history.put(
             doseKey,
             HistoryEntry(
+              medicineId: med.id,
               date: now,
               medicineName: "${med.name}@$time",
               status: 'missed',
@@ -152,93 +152,58 @@ class _HistoryPageState extends State<HistoryPage> {
                                     fontWeight: FontWeight.bold, fontSize: 16),
                               ),
                               const Divider(),
-                              // ...meds.map((entry) {
-                              //   String medName = entry.medicineName;
-                              //   String time = '';
-                              //   if (medName.contains('@')) {
-                              //     final parts = medName.split('@');
-                              //     medName = parts[0];
-                              //     time = parts.length > 1 ? parts[1] : '';
-                              //   }
-
-                              //   Color statusColor;
-                              //   String statusText;
-                              //   switch (entry.status) {
-                              //     case 'taken':
-                              //       statusColor = Colors.green;
-                              //       statusText = 'Taken';
-                              //       break;
-                              //     case 'takenLate':
-                              //       statusColor = Colors.orange;
-                              //       statusText = 'Late Taken';
-                              //       break;
-                              //     case 'missed':
-                              //     default:
-                              //       statusColor = Colors.red;
-                              //       statusText = 'Missed';
-                              //   }
-
-                              //   return ListTile(
-                              //     leading: Icon(Icons.medication,
-                              //         color: statusColor),
-                              //     title: Text(medName),
-                              //     subtitle:
-                              //         time.isNotEmpty ? Text("Time: $time") : null,
-                              //     trailing: Text(
-                              //       statusText,
-                              //       style: TextStyle(color: statusColor),
-                              //     ),
-                              //   );
-                              // }),
                               ...meds.map((entry) {
-  String medName = entry.medicineName;
-  String timeStr = '';
-  if (medName.contains('@')) {
-    final parts = medName.split('@');
-    medName = parts[0];
-    timeStr = parts.length > 1 ? parts[1] : '';
-  }
+                                String medName = entry.medicineName;
+                                String timeStr = '';
+                                if (medName.contains('@')) {
+                                  final parts = medName.split('@');
+                                  medName = parts[0];
+                                  timeStr = parts.length > 1 ? parts[1] : '';
+                                }
 
-  // Format time
-  String formattedTime = '';
-  if (timeStr.isNotEmpty) {
-    final parts = timeStr.split(':');
-    if (parts.length == 2) {
-      final hour = int.tryParse(parts[0]) ?? 0;
-      final minute = int.tryParse(parts[1]) ?? 0;
-      final dt = DateTime(0, 0, 0, hour, minute);
-      formattedTime = "${DateFormat.jm().format(dt)}"; // e.g., 8:30 AM
-    }
-  }
+                                // Format time
+                                String formattedTime = '';
+                                if (timeStr.isNotEmpty) {
+                                  final parts = timeStr.split(':');
+                                  if (parts.length == 2) {
+                                    final hour = int.tryParse(parts[0]) ?? 0;
+                                    final minute = int.tryParse(parts[1]) ?? 0;
+                                    final dt = DateTime(0, 0, 0, hour, minute);
+                                    formattedTime =
+                                        "${DateFormat.jm().format(dt)}"; // e.g., 8:30 AM
+                                  }
+                                }
 
-  Color statusColor;
-  String statusText;
-  switch (entry.status) {
-    case 'taken':
-      statusColor = Colors.green;
-      statusText = 'Taken';
-      break;
-    case 'takenLate':
-      statusColor = Colors.orange;
-      statusText = 'Late Taken';
-      break;
-    case 'missed':
-    default:
-      statusColor = Colors.red;
-      statusText = 'Missed';
-  }
+                                Color statusColor;
+                                String statusText;
+                                switch (entry.status) {
+                                  case 'taken':
+                                    statusColor = Colors.green;
+                                    statusText = 'Taken';
+                                    break;
+                                  case 'takenLate':
+                                    statusColor = Colors.orange;
+                                    statusText = 'Late Taken';
+                                    break;
+                                  case 'missed':
+                                  default:
+                                    statusColor = Colors.red;
+                                    statusText = 'Missed';
+                                }
 
-  return ListTile(
-    leading: Icon(Icons.medication, color: statusColor),
-    title: Text(medName),
-    subtitle: formattedTime.isNotEmpty ? Text("Time: $formattedTime") : null,
-    trailing: Text(
-      statusText,
-      style: TextStyle(color: statusColor),
-    ),
-  );
-}),
-
+                                return ListTile(
+                                  leading: Icon(Icons.medication,
+                                      color: statusColor),
+                                  title: Text(medName),
+                                  subtitle: formattedTime.isNotEmpty
+                                      ? Text("Time: $formattedTime")
+                                      : null,
+                                  trailing: Text(
+                                    statusText,
+                                    style: TextStyle(color: statusColor),
+                                  ),
+                                );
+                              }),
                             ],
                           ),
                         ),

@@ -9,7 +9,8 @@ import '../../Hivemodel/medicine.dart';
 import '../../Hivemodel/history_entry.dart';
 import '../../Hivemodel/health_report.dart';
 
-Future<File?> generateMonthlyReportPdf({required DateTime selectedMonth}) async {
+Future<File?> generateMonthlyReportPdf(
+    {required DateTime selectedMonth}) async {
   final pdf = pw.Document();
 
   // Load Roboto font
@@ -25,24 +26,31 @@ Future<File?> generateMonthlyReportPdf({required DateTime selectedMonth}) async 
   final healthReports = healthBox.values.toList()
     ..sort((a, b) => b.reportDate.compareTo(a.reportDate));
 
-  // --- Medicine Intake Summary ---
   final historySummary = medicines.map((med) {
-    final medHistory = historyBox.values.where((h) =>
-        h.medicineName.contains(med.name) &&
-        h.date.month == selectedMonth.month &&
-        h.date.year == selectedMonth.year).toList();
+    final medHistory = historyBox.values
+        .where((h) =>
+            h.medicineName.contains(med.name) &&
+            h.date.month == selectedMonth.month &&
+            h.date.year == selectedMonth.year)
+        .toList();
 
-    final takenEntries = medHistory.where((h) => h.status.toLowerCase() == 'taken').toList();
-    final skippedEntries = medHistory.where((h) => h.status.toLowerCase() == 'skipped').toList();
+    // Separate statuses
+    final takenEntries =
+        medHistory.where((h) => h.status.toLowerCase() == 'taken').toList();
+    final lateTakenEntries =
+        medHistory.where((h) => h.status.toLowerCase() == 'takenlate').toList();
+    final missedEntries =
+        medHistory.where((h) => h.status.toLowerCase() == 'missed').toList();
 
-    // Latest taken date
-    final latelyTakenDate = takenEntries.isNotEmpty
-        ? takenEntries.map((e) => e.date).reduce((a, b) => a.isAfter(b) ? a : b)
+    // Latest taken (taken + late)
+    final latelyTakenDate = (takenEntries + lateTakenEntries).isNotEmpty
+        ? (takenEntries + lateTakenEntries)
+            .map((e) => e.date)
+            .reduce((a, b) => a.isAfter(b) ? a : b)
         : null;
 
-    // Count of taken on latest date
     final latelyTakenCount = latelyTakenDate != null
-        ? takenEntries
+        ? (takenEntries + lateTakenEntries)
             .where((e) =>
                 e.date.year == latelyTakenDate.year &&
                 e.date.month == latelyTakenDate.month &&
@@ -54,29 +62,34 @@ Future<File?> generateMonthlyReportPdf({required DateTime selectedMonth}) async 
         ? '$latelyTakenCount times (recent: ${DateFormat('dd MMM').format(latelyTakenDate)})'
         : '-';
 
-    final takenCount = takenEntries.length;
-    final missedCount = skippedEntries.length;
+    // Format Missed with count + dates
+    final missedSummary = missedEntries.isNotEmpty
+        ? '${missedEntries.length} times (recent: ${missedEntries.map((e) => DateFormat('dd MMM').format(e.date)).join(', ')})'
+        : '0';
 
-    // Most recent action (taken or skipped)
-    final recentActionDate = medHistory.isNotEmpty
-        ? medHistory.map((e) => e.date).reduce((a, b) => a.isAfter(b) ? a : b)
-        : null;
-    final recentAction = recentActionDate != null
-        ? DateFormat('dd MMM').format(recentActionDate)
-        : '-';
+    // Normal Taken just count
+    final takenSummary = takenEntries.isNotEmpty
+        ? '${takenEntries.length} (${takenEntries.map((e) => DateFormat('dd MMM').format(e.date)).join(', ')})'
+        : '0';
 
     return [
       med.name,
+      takenSummary,
       latelyTaken,
-      takenCount.toString(),
-      missedCount.toString(),
-      recentAction
+      missedSummary,
     ];
   }).toList();
 
-  // --- Expiring Medicines ---
-  final expiringMedicines = medicines
-      .where((med) => med.expiryDate.isBefore(selectedMonth.add(Duration(days: 30))))
+  final expiringMeds = medicines
+      .where(
+        (med) => med.expiryDate.isBefore(
+          selectedMonth.add(const Duration(days: 30)),
+        ),
+      )
+      .toList();
+
+// Step 2: build table data
+  final expiringMedicines = expiringMeds
       .map((med) => [
             med.name,
             med.dosage,
@@ -106,22 +119,24 @@ Future<File?> generateMonthlyReportPdf({required DateTime selectedMonth}) async 
         pw.Center(
           child: pw.Text(
             'Monthly Report - $monthName',
-            style: pw.TextStyle(fontSize: 26, fontWeight: pw.FontWeight.bold, font: roboto),
+            style: pw.TextStyle(
+                fontSize: 26, fontWeight: pw.FontWeight.bold, font: roboto),
           ),
         ),
         pw.SizedBox(height: 20),
 
-        // Medicine Intake Summary
         pw.Text('Medicine Intake Summary:',
             style: pw.TextStyle(fontSize: 18, font: roboto)),
         pw.SizedBox(height: 6),
         pw.TableHelper.fromTextArray(
-          headers: ['Medicine', 'Lately Taken', 'Taken Count', 'Missed Count', 'Recent Action'],
+          headers: ['Medicine', 'Taken', 'Lately Taken', 'Missed'],
           data: historySummary,
-          headerStyle: pw.TextStyle(font: roboto, fontSize: 12, fontWeight: pw.FontWeight.bold),
+          headerStyle: pw.TextStyle(
+              font: roboto, fontSize: 12, fontWeight: pw.FontWeight.bold),
           cellStyle: pw.TextStyle(font: roboto, fontSize: 10),
           border: pw.TableBorder.all(width: 0.5, color: PdfColors.grey),
         ),
+
         pw.SizedBox(height: 20),
 
         // Expiring Medicines
@@ -132,7 +147,8 @@ Future<File?> generateMonthlyReportPdf({required DateTime selectedMonth}) async 
           pw.TableHelper.fromTextArray(
             headers: ['Name', 'Dosage', 'Qty Left', 'Expiry', 'Instructions'],
             data: expiringMedicines,
-            headerStyle: pw.TextStyle(font: roboto, fontSize: 12, fontWeight: pw.FontWeight.bold),
+            headerStyle: pw.TextStyle(
+                font: roboto, fontSize: 12, fontWeight: pw.FontWeight.bold),
             cellStyle: pw.TextStyle(font: roboto, fontSize: 10),
             border: pw.TableBorder.all(width: 0.5, color: PdfColors.grey),
           ),
@@ -146,7 +162,8 @@ Future<File?> generateMonthlyReportPdf({required DateTime selectedMonth}) async 
         pw.TableHelper.fromTextArray(
           headers: ['Date', 'Notes', 'Systolic', 'Diastolic', 'Cholesterol'],
           data: recentHealthReports,
-          headerStyle: pw.TextStyle(font: roboto, fontSize: 12, fontWeight: pw.FontWeight.bold),
+          headerStyle: pw.TextStyle(
+              font: roboto, fontSize: 12, fontWeight: pw.FontWeight.bold),
           cellStyle: pw.TextStyle(font: roboto, fontSize: 10),
           border: pw.TableBorder.all(width: 0.5, color: PdfColors.grey),
         ),
@@ -156,7 +173,8 @@ Future<File?> generateMonthlyReportPdf({required DateTime selectedMonth}) async 
 
   // Save PDF
   final dir = await getApplicationDocumentsDirectory();
-  final file = File('${dir.path}/Monthly_Medicine_Report_${selectedMonth.month}_${selectedMonth.year}.pdf');
+  final file = File(
+      '${dir.path}/Monthly_Medicine_Report_${selectedMonth.month}_${selectedMonth.year}.pdf');
   await file.writeAsBytes(await pdf.save());
   return file;
 }

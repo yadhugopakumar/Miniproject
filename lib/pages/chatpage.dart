@@ -14,6 +14,7 @@ import '../chatmanager/ai_chat/extractedmedicine.dart';
 import '../chatmanager/ai_chat/extractedmedicine_storage.dart';
 import '../chatmanager/ai_chat/gemini_provider.dart';
 import '../bottomnavbar.dart';
+import '../utils/customsnackbar.dart';
 
 class Chatpage extends StatefulWidget {
   const Chatpage({super.key});
@@ -407,9 +408,8 @@ class _ChatpageState extends State<Chatpage> with TickerProviderStateMixin {
       if (source == ImageSource.camera) {
         final status = await Permission.camera.request();
         if (status != PermissionStatus.granted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('Camera permission required')),
-          );
+          AppSnackbar.show(context,
+              message: "Camera permission required", success: true);
           return;
         }
       }
@@ -426,9 +426,8 @@ class _ChatpageState extends State<Chatpage> with TickerProviderStateMixin {
         await _processImage(imageFile, analysisType);
       }
     } catch (e) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Error picking image: $e')),
-      );
+      AppSnackbar.show(context,
+          message: "Error picking image: $e", success: true);
     }
   }
 
@@ -856,13 +855,8 @@ class _ChatpageState extends State<Chatpage> with TickerProviderStateMixin {
       ),
     ).then((result) {
       if (result == true) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('${medicine.name} added successfully!'),
-            backgroundColor: Colors.green,
-            duration: const Duration(seconds: 2),
-          ),
-        );
+        AppSnackbar.show(context,
+            message: "${medicine.name} added successfully!", success: true);
       }
     });
   }
