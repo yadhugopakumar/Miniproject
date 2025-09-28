@@ -286,7 +286,7 @@ class _AlarmRingScreenState extends State<AlarmRingScreen>
                         child: ElevatedButton.icon(
                           onPressed: _handleMissed,
                           icon: const Icon(Icons.close),
-                          label: const Text('MISSED'),
+                          label: const Text("CAN'T TAKE TODAY"),
                           style: ElevatedButton.styleFrom(
                             backgroundColor: Colors.red,
                             foregroundColor: Colors.white,

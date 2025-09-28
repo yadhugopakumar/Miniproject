@@ -5,6 +5,7 @@ import 'package:intl/intl.dart';
 import '../Hivemodel/history_entry.dart';
 import '../Hivemodel/medicine.dart';
 import '../services/hive_services.dart';
+import '../services/fetch_and_store_medicine.dart';
 
 class HistoryPage extends StatefulWidget {
   const HistoryPage({super.key});
@@ -20,35 +21,70 @@ class _HistoryPageState extends State<HistoryPage> {
   void initState() {
     super.initState();
     _populateMissedEntries();
+    pushUnsyncedHistoryToSupabase();
   }
 
+  // void _populateMissedEntries() {
+  //   final history = Hive.box<HistoryEntry>(historyBox);
+  //   final medicines = Hive.box<Medicine>(medicinesBox);
+  //
+  //   final now = DateTime.now();
+  //   final todayKey = "${now.year}-${now.month}-${now.day}";
+  //   final currentTime =
+  //       "${now.hour.toString().padLeft(2, '0')}:${now.minute.toString().padLeft(2, '0')}";
+  //
+  //   for (var med in medicines.values) {
+  //     for (var time in med.dailyIntakeTimes) {
+  //       final doseKey = "${med.name}@${time}_$todayKey";
+  //
+  //       if (!history.containsKey(doseKey) && time.compareTo(currentTime) < 0) {
+  //         history.put(
+  //           doseKey,
+  //           HistoryEntry(
+  //             // medicineId: med.id,
+  //             date: now,
+  //             medicineName: "${med.name}@$time",
+  //             status: 'missed',
+  //           ),
+  //         );
+  //       }
+  //     }
+  //   }
+  // }
   void _populateMissedEntries() {
     final history = Hive.box<HistoryEntry>(historyBox);
     final medicines = Hive.box<Medicine>(medicinesBox);
 
     final now = DateTime.now();
-    final todayKey = "${now.year}-${now.month}-${now.day}";
+    final todayKey = DateFormat('yyyy-MM-dd').format(now); // zero-padded date
     final currentTime =
-        "${now.hour.toString().padLeft(2, '0')}:${now.minute.toString().padLeft(2, '0')}";
+    "${now.hour.toString().padLeft(2, '0')}:${now.minute.toString().padLeft(2, '0')}";
 
-    for (var med in medicines.values) {
-      for (var time in med.dailyIntakeTimes) {
-        final doseKey = "${med.name}@${time}_$todayKey";
+  for (var med in medicines.values) {
+    final medId = med.id ?? med.name; // fallback if no ID
 
-        if (!history.containsKey(doseKey) && time.compareTo(currentTime) < 0) {
-          history.put(
-            doseKey,
-            HistoryEntry(
-              medicineId: med.id,
-              date: now,
-              medicineName: "${med.name}@$time",
-              status: 'missed',
-            ),
-          );
-        }
+    for (var time in med.dailyIntakeTimes) {
+      final doseKey = "${medId}_${todayKey}_$time";
+
+      // only mark as missed if time has passed and entry doesn’t already exist
+      if (!history.containsKey(doseKey) && time.compareTo(currentTime) < 0) {
+        history.put(
+          doseKey,
+          HistoryEntry(
+            date: now,
+            medicineName: med.name, // ✅ plain name only
+            time: time,             // ✅ store time separately
+            status: 'missed',
+            medicineId: med.id,
+            childId: null, // set if you have user/child context
+            remoteId: null,
+          ),
+        );
       }
     }
   }
+  }
+
 
   bool _filterEntry(HistoryEntry entry) {
     switch (selectedFilter) {

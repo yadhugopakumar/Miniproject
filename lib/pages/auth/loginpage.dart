@@ -133,7 +133,7 @@ class _LoginPageState extends State<LoginPage> {
 
       // Hive boxes
       final medicinesBox = Hive.box<Medicine>('medicinesBox');
-      final alarmsBox = Hive.box<AlarmModel>('alarmsBox');
+      final alarmsBox = Hive.box<AlarmModel>('alarms');
 
       // Clear old data
       await medicinesBox.clear();

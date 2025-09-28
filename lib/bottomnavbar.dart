@@ -174,6 +174,7 @@ class _BottomnavbarState extends State<Bottomnavbar>
                 onPressed: () {
                   _player.stop();
                   Navigator.pop(context);
+
                 },
                 child: const Text("Cancel"),
               ),
@@ -197,6 +198,7 @@ class _BottomnavbarState extends State<Bottomnavbar>
       },
     );
   }
+
 
   /// Save vibration preference
   Future<void> saveVibrationPref(bool value) async {

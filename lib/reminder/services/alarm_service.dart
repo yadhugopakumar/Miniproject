@@ -4,6 +4,7 @@ import '../../Hivemodel/alarm_model.dart';
 import '../../Hivemodel/history_entry.dart';
 import '../../Hivemodel/medicine.dart';
 import 'notification_service.dart';
+import '../../Hivemodel/user_settings.dart';
 
 class HistoryService {
   // Use async for database operations
@@ -45,6 +46,12 @@ class HistoryService {
         await entry.save();
       }
     } else {
+      final userBox = Hive.box<UserSettings>('settingsBox');
+      final userSettings = userBox.get('user');
+      if (userSettings == null) {
+        return;
+      }
+      final childId = userSettings.childId;
       // Create new entry
       entry = HistoryEntry(
         date: now,
@@ -53,6 +60,7 @@ class HistoryService {
         status: status,
         time: formattedTime,
         snoozeCount: snoozeCount,
+            childId: childId, // make sure childId is set if required
       );
       await historyBox.put(key, entry);
     }
@@ -118,100 +126,6 @@ class AlarmService {
       await NotificationService.cancelAlarm(alarm.id);
     }
   }
-  // static Future<void> updateHistoryStatus(
-  //   String medicineName, // e.g. "Paracetamol"
-  //   String time, // e.g. "08:00"
-  //   String status, {
-  //   int snoozeCount = 0,
-  // }) async {
-  //   final historyBox = Hive.box<HistoryEntry>('historyBox');
-  //   final now = DateTime.now();
-
-  //   // ✅ Use the same key format as homepage
-  //   final key = '${medicineName}@${time}_${now.year}-${now.month}-${now.day}';
-
-  //   HistoryEntry? entry;
-  //   if (historyBox.containsKey(key)) {
-  //     // update existing entry
-  //     entry = historyBox.get(key);
-  //     entry!.status = status;
-  //     entry.time =
-  //         "${now.hour.toString().padLeft(2, '0')}:${now.minute.toString().padLeft(2, '0')}";
-  //     entry.snoozeCount = snoozeCount;
-  //     await entry.save();
-  //   } else {
-  //     // create new entry if not exists
-  //     entry = HistoryEntry(
-  //       date: now,
-  //       medicineName: "${medicineName}@${time}",
-  //       medicineId: ,
-  //       status: status,
-  //       time:
-  //           "${now.hour.toString().padLeft(2, '0')}:${now.minute.toString().padLeft(2, '0')}",
-  //       snoozeCount: snoozeCount,
-  //     );
-  //     await historyBox.put(key, entry);
-  //   }
-
-  //   print("✅ History updated: $key → $status, snooze=$snoozeCount");
-  // }
-//  Future<void> updateHistoryStatus(
-//   String medicineName, // e.g. "Paracetamol"
-//   String time, // e.g. "08:00"
-//   String status, {
-//   int snoozeCount = 0,
-// }) async {
-//   final historyBox = Hive.box<HistoryEntry>('historyBox');
-//   final medicinesBox = Hive.box<Medicine>('medicinesBox');
-//   final now = DateTime.now();
-
-//   // Key format
-//   final key = '${medicineName}@${time}_${now.year}-${now.month}-${now.day}';
-
-//   // Lookup medicine ID dynamically by name
-//  final Medicine? medicine = medicinesBox.values.cast<Medicine?>().firstWhere(
-//   (med) => med != null && med.name == medicineName,
-//   orElse: () => null,
-// );
-
-
-//   if (medicine == null) {
-//     print("⚠️ Medicine not found for name: $medicineName");
-//     return;
-//   }
-
-//   final formattedTime =
-//       "${now.hour.toString().padLeft(2, '0')}:${now.minute.toString().padLeft(2, '0')}";
-
-//   HistoryEntry? entry;
-//   if (historyBox.containsKey(key)) {
-//     // Update existing entry
-//     entry = historyBox.get(key);
-//     if (entry != null) {
-//       entry.status = status;
-//       entry.time = formattedTime;
-//       entry.snoozeCount = snoozeCount;
-//       entry.medicineId = medicine.id; // assign medicine ID
-//       await entry.save();
-//     }
-//   } else {
-//     // Create new entry if not exists
-//     entry = HistoryEntry(
-//       date: now,
-//       medicineName: medicineName, // store name only
-//       medicineId: medicine.id,    // set medicine ID
-//       status: status,
-//       time: formattedTime,
-//       snoozeCount: snoozeCount,
-//     );
-//     await historyBox.put(key, entry);
-//   }
-
-//   print("✅ History updated: $key → $status, snooze=$snoozeCount");
-// }
-//   }
-
-
   
   static Future<void> snoozeAlarm(AlarmModel alarm) async {
     try {
