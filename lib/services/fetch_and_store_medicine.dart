@@ -1,17 +1,10 @@
 import 'package:intl/intl.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:hive_flutter/hive_flutter.dart';
-
-import '../Hivemodel/health_report.dart';
 import '../Hivemodel/history_entry.dart';
 import '../Hivemodel/medicine.dart';
 import '../Hivemodel/user_settings.dart';
-import 'hive_services.dart';
-
-String convertTo24Hour(String amPmTime) {
-  final parsed = DateFormat("hh:mm a").parse(amPmTime);
-  return '${parsed.hour.toString().padLeft(2, '0')}:${parsed.minute.toString().padLeft(2, '0')}';
-}
+import 'package:collection/collection.dart'; // at top of file
 
 String convertTo24HourSafe(String time) {
   time = time.trim();
@@ -19,152 +12,135 @@ String convertTo24HourSafe(String time) {
     final parsed = DateFormat("hh:mm a").parse(time);
     return '${parsed.hour.toString().padLeft(2, '0')}:${parsed.minute.toString().padLeft(2, '0')}';
   }
-  // Already in 24-hour format
-  return time;
+  return time; // already in 24-hour format
 }
 
-// Future<void> fetchAndStoreTodaysMedicines() async {
-//   final supabase = Supabase.instance.client;
-//   final medicinesBox = Hive.box<Medicine>('medicinesBox');
-//   final userBox = Hive.box<UserSettings>('settingsBox');
-//     final historyBox = Hive.box<HistoryEntry>('historyBox');
-//   final userSettings =
-//       userBox.get('user'); // 'user' is the key you saved it with
+Future<void> pushUnsyncedHistoryToSupabase() async {
+  final supabase = Supabase.instance.client;
+  final historyBox = Hive.box<HistoryEntry>('historyBox');
+  final medicinesBox = Hive.box<Medicine>('medicinesBox');
 
-//   if (userSettings == null) {
-//     print("No user found in Hive.");
-//     return;
-//   }
+  final today = DateTime.now();
+  final unsynced = historyBox.values
+      .where((e) =>
+          e.remoteId == null &&
+          e.date.year == today.year &&
+          e.date.month == today.month &&
+          e.date.day == today.day)
+      .toList();
 
-//   final childId = userSettings.childId; // <-- String, UUID
-//   // final today = DateTime.now().toIso8601String().substring(0, 10);
+  if (unsynced.isEmpty) {
+    print("No unsynced history found for today.");
+    return;
+  }
 
-//   final response =
-//       await supabase.from('medicine').select().eq('child_id', childId);
+  print("Medicines in Hive:");
+  for (var m in medicinesBox.values) {
+    print("${m.name} -> ${m.id}");
+  }
 
-//   if (response.isEmpty) {
-//     print("No medicines for today.");
-//     return;
-//   }
+  // --- Ensure medicineId is linked properly ---
+  for (var entry in unsynced) {
+    if (entry.medicineId == null) {
+      final medicine = medicinesBox.values.firstWhereOrNull((m) =>
+          m.name.trim().toLowerCase() ==
+          entry.medicineName.trim().toLowerCase());
+      if (medicine != null) {
+        entry.medicineId = medicine.id;
+        await entry.save();
+        print("Linked ${entry.medicineName} -> ${medicine.id}");
+      } else {
+        print(
+            "Skipping entry '${entry.medicineName}@${entry.time}' because medicine not found in Hive");
+      }
+    }
+  }
 
-//   // Clear old data so only today’s meds show
-//   await medicinesBox.clear();
+  // --- Filter only entries ready for sync ---
+  final readyToSync = unsynced.where((e) => e.medicineId != null).toList();
+  if (readyToSync.isEmpty) {
+    print("No history entries ready to sync after medicineId check.");
+    return;
+  }
 
-//   for (var med in response) {
-//     // Convert all times to "HH:mm" before storing
-//     final convertedTimes = (med['daily_intake_times'] as List)
-//         .map((t) => convertTo24HourSafe(t))
-//         .toList();
+  // --- Prepare batch for Supabase ---
+  final userBox = Hive.box<UserSettings>('settingsBox');
+  final userSettings = userBox.get('user');
+  final childId = userSettings?.childId;
 
-//     final medicine = Medicine(
-//       id: med['id'], // Assuming 'id' is the Supabase medicine ID
-//       name: med['name'],
-//       dosage: med['dosage'],
-//       expiryDate: DateTime.parse(med['expiry_date']),
-//       dailyIntakeTimes: convertedTimes,
-//       totalQuantity: med['total_quantity'],
-//       quantityLeft: med['quantity_left'],
-//       refillThreshold: med['refill_threshold'],
-//     );
+  final batch = readyToSync
+      .map((e) => {
+            'medicine_id': e.medicineId,
+            'child_id': childId,
+            'medicine_name': e.medicineName,
+            'date': e.date.toIso8601String().substring(0, 10),
+            'status': e.status,
+            'time': e.time,
+          })
+      .toList();
 
-//     await medicinesBox.add(medicine);
-//   }
+  try {
+    final data = await supabase
+        .from('history_entry')
+        .upsert(batch, onConflict: 'history_unique')
+        .select();
 
-//   print("Today's medicines fetched & stored in Hive.");
-// }
+    print("Upsert response: $data");
 
-// Future<void> syncHealthReportsToHive(String childId) async {
-// final hiveBox = Hive.box<HealthReport>('healthReportsBox');
-//   final supabase = Supabase.instance.client;
-//   if (hiveBox.isNotEmpty) {
-//     return; // Already cached
-//   }
+    // --- Update remoteId + deduplicate in Hive ---
+    for (var row in data) {
+      final medId = row['medicine_id'];
+      final dateStr = row['date'];
+      final time = row['time'];
 
-//   final response = await supabase
-//       .from('health_reports')
-//       .select()
-//       .eq('child_id', childId)
-//       .order('report_date', ascending: false);
+      // final key = '${medId}_${dateStr}_$time';
+      final key = '${medId}_${dateStr}_${time}_${childId}';
 
-//   if (response == []  && response.isNotEmpty) {
-//     for (var row in response) {
-//       final report = HealthReport(
-//         childId: row['child_id'],
-//         reportDate: DateTime.parse(row['report_date']),
-//         systolic: row['report_type'] == 'systolic'
-//             ? row['value'] ?? 0
-//             : 0,
-//         diastolic: row['report_type'] == 'diastolic'
-//             ? row['value'] ?? 0
-//             : 0,
-//         cholesterol: row['report_type'] == 'cholesterol'
-//             ? row['value'] ?? 0
-//             : 0,
-//         notes: row['notes'] ?? '',
-//         id: row['id'],
-//       );
-//       await hiveBox.add(report);
-//     }
-//   } else {
-//     print("⚠️ No health reports found for child: $childId");
-//   }
+      final entry = historyBox.get(key);
+      if (entry != null) {
+        entry.remoteId = row['id'];
+        await entry.save();
+      } else {
+        // in case entry wasn't keyed yet, fix it
+        final match = readyToSync.firstWhere(
+          (e) =>
+              e.medicineId == medId &&
+              e.time == time &&
+              e.date.toIso8601String().substring(0, 10) == dateStr,
+        );
+        match.remoteId = row['id'];
+        await historyBox.put(key, match);
+      }
+    }
 
-// // 2️⃣ Push local history entries to Supabase
-//   if (historyBox.isNotEmpty) {
-//     for (var entry in historyBox.values) {
-//       // Find medicine ID
-//       final localMed = medicinesBox.values.firstWhere(
-//         (med) => entry.medicineName.contains(med.name),
-//         orElse: () => null,
-//       );
+    print("✅ Today's local history synced to Supabase successfully.");
+  } catch (e, s) {
+    print("Exception syncing today's history: $e");
+    print(s);
+  }
+}
 
-//       if (localMed == null) continue;
+String buildDoseKey(
+    String medicineId, DateTime date, String time, String childId) {
+  final formattedDate = DateFormat('yyyy-MM-dd').format(date); // zero-padded
+  return '${medicineId}_${formattedDate}_${time}_${childId}';
+}
 
-//       // Extract time
-//       String? timeStr;
-//       if (entry.medicineName.contains('@')) {
-//         timeStr = entry.medicineName.split('@')[1];
-//       }
-
-//       try {
-//         final result = await supabase.from('history_entry').insert({
-//           'medicine_id': localMed.id,
-//           'date': entry.date.toIso8601String().substring(0, 10),
-//           'status': entry.status,
-//           'time': timeStr,
-//         }).execute();
-
-//         if (result.error != null) {
-//           print("Failed to push history: ${result.error!.message}");
-//         }
-//       } catch (e) {
-//         print("Error pushing history: $e");
-//       }
-//     }
-//     print("All local history pushed to Supabase.");
-//   }
-
-// }
-Future<void> fetchAndStoreTodaysMedicines() async {
+// --- Fetch and store medicines ---
+Future<void> fetchAndStoreMedicines() async {
   final supabase = Supabase.instance.client;
   final medicinesBox = Hive.box<Medicine>('medicinesBox');
-  final historyBox = Hive.box<HistoryEntry>('historyBox');
   final userBox = Hive.box<UserSettings>('settingsBox');
 
   final userSettings = userBox.get('user');
   if (userSettings == null) return;
-
   final childId = userSettings.childId;
 
-  // Fetch medicines
-  final response =
+  final medResponse =
       await supabase.from('medicine').select().eq('child_id', childId);
 
-  if (response.isEmpty) return;
-
   await medicinesBox.clear();
-
-  for (var med in response) {
+  for (var med in medResponse) {
     final convertedTimes = (med['daily_intake_times'] as List)
         .map((t) => convertTo24HourSafe(t))
         .toList();
@@ -179,44 +155,61 @@ Future<void> fetchAndStoreTodaysMedicines() async {
       quantityLeft: med['quantity_left'],
       refillThreshold: med['refill_threshold'],
     );
-
     await medicinesBox.add(medicine);
   }
 
-  print("Today's medicines fetched & stored in Hive.");
+  print("✅ Medicines fetched and stored in Hive.");
+}
 
-  // Push history entries
-  if (historyBox.isNotEmpty) {
-    List<Map<String, dynamic>> batch = [];
+// --- Fetch and store recent history ---
+Future<void> fetchAndStoreRecentHistory() async {
+  final supabase = Supabase.instance.client;
+  final historyBox = Hive.box<HistoryEntry>('historyBox');
+  final userBox = Hive.box<UserSettings>('settingsBox');
 
-    for (var entry in historyBox.values) {
-      final localMed = medicinesBox.values.cast<Medicine?>().firstWhere(
-          (med) => med != null && entry.medicineName.contains(med.name),
-          orElse: () => null);
+  final userSettings = userBox.get('user');
+  if (userSettings == null) return;
+  final childId = userSettings.childId;
 
-      if (localMed == null) continue;
+  final lastWeek = DateTime.now().subtract(const Duration(days: 7));
+  final historyResponse = await supabase
+      .from('history_entry')
+      .select()
+      .eq('child_id', childId)
+      .gte('date', lastWeek.toIso8601String());
 
-      String? timeStr;
-      if (entry.medicineName.contains('@')) {
-        timeStr = entry.medicineName.split('@')[1];
-      }
+  print("Fetched history: $historyResponse");
 
-      batch.add({
-        'medicine_id': localMed.id,
-        'date': entry.date.toIso8601String().substring(0, 10),
-        'status': entry.status,
-        'time': timeStr,
-      });
-    }
+  for (var h in historyResponse) {
+    final normalizedName = h['medicine_name'].toString().trim();
+    final time = h['time'];
+    final dateStr = h['date'];
+    final medicineId = h['medicine_id'] ?? normalizedName;
 
-    if (batch.isNotEmpty) {
-      try {
-        await supabase.from('history_entry').insert(batch);
-        print("All local history pushed to Supabase.");
-      } catch (e, stackTrace) {
-        print("Error pushing history: $e");
-        print(stackTrace);
-      }
+    final key = buildDoseKey(
+        medicineId.toString(), DateTime.parse(dateStr), time, childId);
+
+    final existingEntry = historyBox.get(key);
+    if (existingEntry != null) {
+      existingEntry
+        ..status = h['status']
+        ..medicineId = h['medicine_id']
+        ..childId = childId
+        ..remoteId = h['id'];
+      await existingEntry.save();
+    } else {
+      final entry = HistoryEntry(
+        date: DateTime.parse(dateStr),
+        medicineName: normalizedName,
+        status: h['status'],
+        time: time,
+        medicineId: h['medicine_id'] ?? normalizedName,
+        remoteId: h['id'],
+        childId: childId,
+      );
+      await historyBox.put(key, entry);
     }
   }
+
+  print("✅ Recent history fetched and stored in Hive.");
 }

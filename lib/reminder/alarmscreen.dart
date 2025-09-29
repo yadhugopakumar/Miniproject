@@ -6,6 +6,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:audioplayers/audioplayers.dart';
 import '../Hivemodel/alarm_model.dart';
 import '../Hivemodel/medicine.dart';
+import '../utils/customsnackbar.dart';
 import 'services/alarm_service.dart';
 
 class AlarmRingScreen extends StatefulWidget {
@@ -75,9 +76,9 @@ class _AlarmRingScreenState extends State<AlarmRingScreen>
 
     if (mounted) {
       Navigator.pop(context);
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Alarm snoozed for 5 minutes')),
-      );
+    
+       AppSnackbar.show(context,
+          message: "Alarm snoozed for 5 minutes", success: true);
     }
   }
 
@@ -113,49 +114,27 @@ class _AlarmRingScreenState extends State<AlarmRingScreen>
 
       // The service marked history as "taken" or "takenLate" internally.
       // If you want to show late message, read history or keep logic in the service.
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Medication taken successfully')),
-      );
+      AppSnackbar.show(context,
+          message: "Medication taken successfully", success: true);
     }
   }
 
-// Future<void> _handleMissed() async {
-//   await _stopAlarmAndVibration();
-
-//   final alarm = widget.alarm;
-
-//   // Mark missed directly and update model/history
-//   await AlarmService.updateHistoryStatus(alarm.medicineName, "missed");
-
-//   // Update alarm model state too (so UI reflects it)
-//   alarm.lastAction = 'missed';
-//   alarm.lastActionTime = DateTime.now();
-//   await AlarmService.box.put(alarm.id, alarm);
-
-//   // Stop any alarms
-//   await Alarm.stop(alarm.id);
-//   if (alarm.snoozeId != null) {
-//     await Alarm.stop(alarm.snoozeId!);
-//     alarm.snoozeId = null;
-//     await AlarmService.box.put(alarm.id, alarm);
-//   }
-
-//   if (mounted) {
-//     Navigator.pop(context);
-//     ScaffoldMessenger.of(context).showSnackBar(
-//       const SnackBar(content: Text('Dose marked as missed')),
-//     );
-//   }
-// }
   Future<void> _handleMissed() async {
     await _stopAlarmAndVibration();
 
     final alarm = widget.alarm;
-    final time =
-        '${alarm.hour.toString().padLeft(2, '0')}:${alarm.minute.toString().padLeft(2, '0')}';
+    // final time =
+    //     '${alarm.hour.toString().padLeft(2, '0')}:${alarm.minute.toString().padLeft(2, '0')}';
+        final missedTime = DateTime(
+          DateTime.now().year,
+          DateTime.now().month,
+          DateTime.now().day,
+          alarm.hour,
+        alarm.minute,
+        );
 
     // Mark missed in history
-    await AlarmService.updateHistoryStatus(alarm.medicineName, time, "missed");
+    await HistoryService.updateHistoryStatus(alarm.medicineName, missedTime, "missed");
 
     // Update alarm model state for UI
     alarm.lastAction = 'missed';
@@ -172,9 +151,9 @@ class _AlarmRingScreenState extends State<AlarmRingScreen>
 
     if (mounted) {
       Navigator.pop(context);
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Dose marked as missed')),
-      );
+
+      AppSnackbar.show(context,
+          message: "Dose marked as missed", success: true);
     }
   }
 
@@ -314,7 +293,7 @@ class _AlarmRingScreenState extends State<AlarmRingScreen>
                         child: ElevatedButton.icon(
                           onPressed: _handleMissed,
                           icon: const Icon(Icons.close),
-                          label: const Text('MISSED'),
+                          label: const Text("CAN'T TAKE TODAY"),
                           style: ElevatedButton.styleFrom(
                             backgroundColor: Colors.red,
                             foregroundColor: Colors.white,

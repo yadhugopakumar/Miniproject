@@ -47,6 +47,9 @@ class AlarmModel extends HiveObject {
   String dosage;
   @HiveField(14)
   int? snoozeId;
+  @HiveField(15) // next available Hive field number
+  int snoozeCount;
+
   AlarmModel({
     required this.id,
     required this.title,
@@ -62,6 +65,7 @@ class AlarmModel extends HiveObject {
     this.lastTriggered,
     this.lastAction,
     this.lastActionTime,
+      this.snoozeCount = 0, // initialize to 0
   })  : selectedDays = selectedDays ?? List.filled(7, true),
         createdAt = createdAt ?? DateTime.now(),
         description = description ?? "";

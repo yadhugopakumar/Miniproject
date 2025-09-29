@@ -4,6 +4,7 @@ import 'package:hive_flutter/adapters.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../../Hivemodel/health_report.dart';
+import '../../utils/customsnackbar.dart';
 
 class Reportspage extends StatefulWidget {
   const Reportspage({super.key});
@@ -36,7 +37,8 @@ class _ReportspageState extends State<Reportspage> {
   void _toast(String msg) {
     if (!mounted) return;
     ScaffoldMessenger.of(context).hideCurrentSnackBar();
-    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(msg)));
+     AppSnackbar.show(context,
+            message: msg, success: true);
   }
 
   Future<void> _addReport(HealthReport report) async {

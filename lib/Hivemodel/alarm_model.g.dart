@@ -31,13 +31,14 @@ class AlarmModelAdapter extends TypeAdapter<AlarmModel> {
       lastTriggered: fields[9] as DateTime?,
       lastAction: fields[10] as String?,
       lastActionTime: fields[11] as DateTime?,
+      snoozeCount: fields[15] as int,
     )..snoozeId = fields[14] as int?;
   }
 
   @override
   void write(BinaryWriter writer, AlarmModel obj) {
     writer
-      ..writeByte(15)
+      ..writeByte(16)
       ..writeByte(0)
       ..write(obj.id)
       ..writeByte(1)
@@ -67,7 +68,9 @@ class AlarmModelAdapter extends TypeAdapter<AlarmModel> {
       ..writeByte(13)
       ..write(obj.dosage)
       ..writeByte(14)
-      ..write(obj.snoozeId);
+      ..write(obj.snoozeId)
+      ..writeByte(15)
+      ..write(obj.snoozeCount);
   }
 
   @override
