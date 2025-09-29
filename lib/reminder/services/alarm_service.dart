@@ -5,69 +5,83 @@ import '../../Hivemodel/history_entry.dart';
 import '../../Hivemodel/medicine.dart';
 import 'notification_service.dart';
 import '../../Hivemodel/user_settings.dart';
+import '../../services/fetch_and_store_medicine.dart';
+import 'package:collection/collection.dart';
 
 class HistoryService {
-  // Use async for database operations
   static Future<void> updateHistoryStatus(
     String medicineName,
-    String time,
+    DateTime actionTime,
     String status, {
     int snoozeCount = 0,
   }) async {
     final historyBox = Hive.box<HistoryEntry>('historyBox');
     final medicinesBox = Hive.box<Medicine>('medicinesBox');
-    final now = DateTime.now();
+    final userBox = Hive.box<UserSettings>('settingsBox');
+    final userSettings = userBox.get('user');
+    if (userSettings == null) return;
+    final childId = userSettings.childId;
 
-    // Key format
-    final key = '${medicineName}@${time}_${now.year}-${now.month}-${now.day}';
-
-    // Lookup medicine ID dynamically
-    final Medicine? medicine = medicinesBox.values
-        .cast<Medicine?>()
-        .firstWhere((med) => med != null && med.name == medicineName, orElse: () => null);
-
-    if (medicine == null) {
-      print("⚠️ Medicine not found for name: $medicineName");
-      return;
-    }
+    // Find the Medicine object by name
+    final Medicine? medicine =
+        medicinesBox.values.firstWhereOrNull((m) => m.name == medicineName);
+    if (medicine == null) return;
 
     final formattedTime =
-        "${now.hour.toString().padLeft(2, '0')}:${now.minute.toString().padLeft(2, '0')}";
+        "${actionTime.hour.toString().padLeft(2, '0')}:${actionTime.minute.toString().padLeft(2, '0')}";
 
-    HistoryEntry? entry;
-    if (historyBox.containsKey(key)) {
-      // Update existing entry
-      entry = historyBox.get(key);
-      if (entry != null) {
-        entry.status = status;
-        entry.time = formattedTime;
-        entry.snoozeCount = snoozeCount;
-        entry.medicineId = medicine.id;
-        await entry.save();
+    // Use medicineId in the key to match Supabase unique constraint
+    final doseKey = buildDoseKey(
+      medicine.id , // fallback to name if id null
+      actionTime,
+      formattedTime,
+      childId,
+    );
+
+    final existingEntry = historyBox.get(doseKey);
+
+    if (existingEntry != null) {
+      // 🔹 Rules:
+      // taken → always final
+      // takenLate → always override snoozed/missed
+      // missed → override snoozed, but not taken
+      // snoozed → only set if not taken/takenLate
+      if (status == "taken") {
+        existingEntry.status = "taken";
+      } else if (status == "takenLate") {
+        existingEntry.status = "takenLate";
+        existingEntry.statusChanged = true;
+      } else if (status == "missed" && existingEntry.status != "taken") {
+        existingEntry.status = "missed";
+        existingEntry.statusChanged = true;
+      } else if (status == "snoozed" &&
+          existingEntry.status != "taken" &&
+          existingEntry.status != "takenLate") {
+        existingEntry.status = "snoozed";
+        existingEntry.statusChanged = true;
       }
+
+      existingEntry.snoozeCount = snoozeCount;
+      await existingEntry.save();
     } else {
-      final userBox = Hive.box<UserSettings>('settingsBox');
-      final userSettings = userBox.get('user');
-      if (userSettings == null) {
-        return;
-      }
-      final childId = userSettings.childId;
       // Create new entry
-      entry = HistoryEntry(
-        date: now,
+      final newEntry = HistoryEntry(
+        date: actionTime,
         medicineName: medicineName,
         medicineId: medicine.id,
         status: status,
         time: formattedTime,
         snoozeCount: snoozeCount,
-            childId: childId, // make sure childId is set if required
+        childId: childId,
+        statusChanged: true, // all new entries need syncing
       );
-      await historyBox.put(key, entry);
+      await historyBox.put(doseKey, newEntry);
     }
 
-    print("✅ History updated: $key → $status, snooze=$snoozeCount");
+    print("✅ History updated: $doseKey → $status, snooze=$snoozeCount");
   }
 }
+
 class AlarmService {
   static const String _boxName = 'alarms';
   static Box? _box;
@@ -126,7 +140,7 @@ class AlarmService {
       await NotificationService.cancelAlarm(alarm.id);
     }
   }
-  
+
   static Future<void> snoozeAlarm(AlarmModel alarm) async {
     try {
       print('🔔 Snoozing alarm id: ${alarm.id}');
@@ -138,26 +152,41 @@ class AlarmService {
         await box.delete(alarm.snoozeId!); // remove old snooze from Hive
       }
 
-      // Cancel main notification if needed
+      // Cancel main notification
       await NotificationService.cancelAlarm(alarm.id);
 
       // Assign a new snooze ID
       final snoozeId = alarm.id + 10000;
       alarm.snoozeId = snoozeId;
 
+      // Use original alarm time for history
+      final alarmTime = DateTime(
+        DateTime.now().year,
+        DateTime.now().month,
+        DateTime.now().day,
+        alarm.hour,
+        alarm.minute,
+      );
+
       // Update history
-      print('📝 Updating history for snooze');
-      final time =
-          '${alarm.hour.toString().padLeft(2, '0')}:${alarm.minute.toString().padLeft(2, '0')}';
-      await HistoryService.updateHistoryStatus(alarm.medicineName, time, "snoozed",
-          snoozeCount: 1);
+      final newSnoozeCount = (alarm.snoozeCount) + 1;
+      print('📝 Updating history for snooze, snoozeCount=$newSnoozeCount');
+
+      // When calling updateHistoryStatus
+      await HistoryService.updateHistoryStatus(
+        alarm.medicineName,
+        alarmTime,
+        "snoozed", // or "missed"/"takenLate"
+        snoozeCount: newSnoozeCount,
+      );
 
       // Update alarm model
       alarm.lastAction = 'snoozed';
       alarm.lastActionTime = DateTime.now();
+      alarm.snoozeCount = newSnoozeCount;
       await box.put(alarm.id, alarm);
 
-      // Create a separate AlarmModel for snooze so getAlarmById works
+      // Create a separate AlarmModel for the snooze trigger
       final snoozeAlarm = AlarmModel(
         id: snoozeId,
         medicineName: alarm.medicineName,
@@ -171,17 +200,15 @@ class AlarmService {
       await box.put(snoozeId, snoozeAlarm);
 
       // Schedule snooze alarm
-      final snoozeTime =
-          DateTime.now().add(const Duration(minutes: 1)); // change as needed
+      final snoozeTime = DateTime.now().add(const Duration(minutes: 1));
       print('⏰ Scheduling snooze for $snoozeTime with id $snoozeId');
-
       await Alarm.set(
         alarmSettings: AlarmSettings(
           id: snoozeId,
           dateTime: snoozeTime,
-          assetAudioPath: '', // sound handled in AlarmRingScreen
-          notificationTitle: '${alarm.title} (Snoozed)', // required
-          notificationBody: alarm.description, // required
+          assetAudioPath: '',
+          notificationTitle: '${alarm.title} (Snoozed)',
+          notificationBody: alarm.description,
           loopAudio: true,
           vibrate: false,
           enableNotificationOnKill: true,
@@ -189,13 +216,13 @@ class AlarmService {
         ),
       );
 
-      print('✅ Snooze scheduled successfully');
-
       // Schedule next main alarm if repeating
       if (alarm.isRepeating) {
         print('📅 Scheduling main alarm for next repetition');
         await _scheduleAlarm(alarm);
       }
+
+      print('✅ Snooze scheduled successfully');
     } catch (e, s) {
       print('❌ Error in snoozeAlarm: $e');
       print(s);
@@ -217,26 +244,44 @@ class AlarmService {
       // Cancel notifications
       await NotificationService.cancelAlarm(alarm.id);
 
-      // Update history
-      final now = DateTime.now();
+      // Use the original alarm time for history
+      final alarmTime = DateTime(
+        DateTime.now().year,
+        DateTime.now().month,
+        DateTime.now().day,
+        alarm.hour,
+        alarm.minute,
+      );
 
-      final time =
-          '${alarm.hour.toString().padLeft(2, '0')}:${alarm.minute.toString().padLeft(2, '0')}';
+      // Determine status and snooze count
+      String status;
+      int snoozeCount = alarm.snoozeCount;
 
-      if (alarm.lastAction == 'snoozed' && alarm.lastActionTime != null) {
-        final diffMinutes = now.difference(alarm.lastActionTime!).inMinutes;
-        final snoozeCount = (diffMinutes / 5).ceil();
-        print('📝 Updating history: takenLate, snoozeCount=$snoozeCount');
-        await HistoryService.updateHistoryStatus(alarm.medicineName, time, "takenLate",
-            snoozeCount: snoozeCount);
+      if (alarm.lastAction == 'snoozed') {
+        status = 'takenLate';
+        snoozeCount += 1; // include last snooze
       } else {
-        print('📝 Updating history: taken');
-        await HistoryService.updateHistoryStatus(alarm.medicineName, time, "taken");
+        status = 'taken';
       }
+
+      print('📝 Updating history: $status, snoozeCount=$snoozeCount');
+
+      // Always upgrade snoozed to takenLate
+      if (alarm.lastAction == 'snoozed' || status == 'snoozed') {
+        status = 'takenLate';
+      }
+
+      await HistoryService.updateHistoryStatus(
+        alarm.medicineName,
+        alarmTime,
+        status,
+        snoozeCount: snoozeCount,
+      );
 
       // Update alarm model
       alarm.lastAction = 'taken';
-      alarm.lastActionTime = now;
+      alarm.lastActionTime = DateTime.now();
+      alarm.snoozeCount = 0; // reset after taken
       await box.put(alarm.id, alarm);
 
       // Schedule next alarm if repeating
@@ -300,5 +345,4 @@ class AlarmService {
     await box.put(alarm.id, alarm);
   }
 
-  // ... rest of your existing methods
 }

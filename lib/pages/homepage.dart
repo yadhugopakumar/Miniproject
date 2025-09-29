@@ -10,6 +10,7 @@ import '../reminder/vibrationcontroller.dart';
 import '../services/fetch_and_store_medicine.dart';
 import 'package:badges/badges.dart' as badges;
 import '../../Hivemodel/user_settings.dart';
+import 'package:intl/intl.dart';
 
 class Homepage extends StatefulWidget {
   const Homepage({super.key});
@@ -22,30 +23,20 @@ class _HomepageStateContent extends State<Homepage> {
   @override
   void initState() {
     super.initState();
-    fetchAndStoreTodaysMedicinesAndHistory();
+    fetchAndStoreMedicines();
   }
 
   final DateTime today = DateTime.now();
 
-  // bool _isTaken(String medicineName, String time, DateTime date,
-  //     Box<HistoryEntry> historyBox) {
-  //   return historyBox.values.any((entry) =>
-  //       entry.medicineName == "$medicineName@$time" &&
-  //       entry.date.year == date.year &&
-  //       entry.date.month == date.month &&
-  //       entry.date.day == date.day &&
-  //       entry.status == 'taken');
-  // }
-
-  bool _isTaken(String medicineName, String time, DateTime date, Box<HistoryEntry> historyBox) {
+  bool _isTaken(String medicineName, String time, DateTime date,
+      Box<HistoryEntry> historyBox) {
     return historyBox.values.any((entry) =>
-    entry.medicineName == medicineName &&
-    entry.time == time &&
-    entry.date.year == date.year &&
-    entry.date.month == date.month &&
-    entry.date.day == date.day &&
-    (entry.status == 'taken' || entry.status == 'takenLate')
-    );
+        entry.medicineName == medicineName &&
+        entry.time == time &&
+        entry.date.year == date.year &&
+        entry.date.month == date.month &&
+        entry.date.day == date.day &&
+        (entry.status == 'taken' || entry.status == 'takenLate'));
   }
 
   String formatTime(String time24) {
@@ -79,7 +70,7 @@ class _HomepageStateContent extends State<Homepage> {
     final entry = historyBox.values.cast<HistoryEntry?>().firstWhere(
           (e) =>
               e != null &&
-              e.medicineName == "$medicineName@$time" &&
+              e.medicineName == medicineName &&
               e.date.year == date.year &&
               e.date.month == date.month &&
               e.date.day == date.day,
@@ -95,7 +86,7 @@ class _HomepageStateContent extends State<Homepage> {
     final historyBox = Hive.box<HistoryEntry>('historyBox');
 
     Future<void> _refreshData() async {
-      await fetchAndStoreTodaysMedicinesAndHistory(); // call your Supabase fetch
+      await fetchAndStoreMedicines(); // call your Supabase fetch
       setState(() {}); // rebuild UI with updated Hive data
     }
 
@@ -157,25 +148,71 @@ class _HomepageStateContent extends State<Homepage> {
               final meds = box.values.toList();
               final todayMeds = <_TodaySchedule>[];
               final historyBox = Hive.box<HistoryEntry>('historyBox');
+              // for (var med in meds) {
+              //   for (final time in med.dailyIntakeTimes) {
+              //     todayMeds.add(_TodaySchedule(
+              //       medicine: med,
+              //       time: time,
+              //       dosage: med.dosage,
+              //       taken: _isTaken(med.name, time, today, historyBox),
+              //     ));
+              //   }
+              // }
               for (var med in meds) {
                 for (final time in med.dailyIntakeTimes) {
+                  final parts = time.split(':');
+                  final doseDateTime = DateTime(
+                    today.year,
+                    today.month,
+                    today.day,
+                    int.parse(parts[0]),
+                    int.parse(parts[1]),
+                  );
+
+                  final userBox = Hive.box<UserSettings>('settingsBox');
+                  final childId = userBox.get('user')?.childId ??
+                      'defaultChildId'; // Replace 'defaultChildId' with a fallback value if needed
+                  final doseKey =
+                      buildDoseKey(med.id, doseDateTime, time, childId);
+
+                  // Ensure history exists
+                  if (!historyBox.containsKey(doseKey)) {
+                    final now = DateTime.now();
+                    final status =
+                        doseDateTime.isBefore(now) ? 'missed' : 'pending';
+                    final entry = HistoryEntry(
+                      date: doseDateTime,
+                      medicineName: med.name,
+                      medicineId: med.id,
+                      time: time,
+                      childId: childId,
+                      status: status,
+                      statusChanged: true,
+                      remoteId: null,
+                    );
+                    historyBox.put(doseKey, entry);
+                  }
+
+                  final taken = _isTaken(med.name, time, today, historyBox);
+
                   todayMeds.add(_TodaySchedule(
                     medicine: med,
                     time: time,
                     dosage: med.dosage,
-                    taken: _isTaken(med.name, time, today, historyBox),
+                    taken: taken,
                   ));
                 }
               }
+
               List<_TodaySchedule> sortMedicines(List<_TodaySchedule> meds,
                   Box<HistoryEntry> historyBox, DateTime today) {
                 // Status priority: lower → higher priority
                 final statusPriority = {
-                  'pending': 0, // not taken
-                  'taken': 1,
-                  'missed': 4,
-                  'takenLate': 3,
+                  'pending': 0,
+                  'missed': 1,
                   'snoozed': 2,
+                  'taken': 3,
+                  'takenLate': 4,
                 };
 
                 meds.sort((a, b) {
@@ -273,80 +310,6 @@ class _HomepageStateContent extends State<Homepage> {
                       buttonColor: buttonColor,
                       buttonText: buttonText,
                       disableButton: disableButton,
-//                       onTap: () async {
-//                         if (disableButton) return;
-//
-//                         final confirm = await showDialog<bool>(
-//                           context: context,
-//                           builder: (_) => AlertDialog(
-//                             title: Text(buttonText == 'Confirm Taken'
-//                                 ? "Confirm this dose was taken?"
-//                                 : "Do you want to mark this dose as taken?"),
-//                             actions: [
-//                               TextButton(
-//                                   onPressed: () =>
-//                                       Navigator.pop(context, false),
-//                                   child: Text("No")),
-//                               TextButton(
-//                                   onPressed: () => Navigator.pop(context, true),
-//                                   child: Text("Yes")),
-//                             ],
-//                           ),
-//                         );
-//
-//                         if (confirm != true) return;
-//
-//                         final now = DateTime.now();
-//                         final doseKey =
-//                             '${sched.medicine.name}@${sched.time}_${now.year}-${now.month}-${now.day}';
-// print(doseKey);
-//                         String newStatus;
-//                         if (status == 'missed') {
-//                           newStatus =
-//                               'takenLate'; // first time marking a missed dose
-//                         } else if (status == 'takenLate') {
-//                           newStatus = 'Late Taken'; // confirm late
-//                         } else if (status == 'taken') {
-//                           newStatus = 'taken'; // already taken, confirmation
-//                         } else {
-//                           newStatus = 'taken'; // normal take
-//                         }
-//                         final userBox = Hive.box<UserSettings>('settingsBox');
-//                         final userSettings = userBox.get('user');
-//                         if (userSettings == null) {
-//
-//                           return;
-//                         }
-//
-//
-//                         final childId = userSettings.childId;
-//
-//                         print(childId);
-//                         print(sched.medicine.name);
-//                         print( sched.medicine.id);
-//                         print(newStatus);
-//                         await historyBox.put(
-//                           doseKey,
-//                           HistoryEntry(
-//                             date: now,
-//                             time: sched.time,
-//                             medicineName: sched.medicine.name, // remove "@time" from name
-//                             medicineId: sched.medicine.id,     // ✅ set medicineId
-//                             childId: childId,     // ✅ set childId
-//                             status: newStatus,
-//                           ),
-//                         );
-//
-//                         if (newStatus == 'taken') {
-//                           final dose = int.tryParse(sched.medicine.dosage) ?? 1;
-//                           sched.medicine.quantityLeft =
-//                               (sched.medicine.quantityLeft - dose)
-//                                   .clamp(0, sched.medicine.quantityLeft);
-//                           await sched.medicine.save();
-//                         }
-//
-//                         setState(() {}); // refresh tile
-//                       },
                       onTap: () async {
                         if (disableButton) return;
 
@@ -354,13 +317,14 @@ class _HomepageStateContent extends State<Homepage> {
                           context: context,
                           builder: (_) => AlertDialog(
                             title: Text(buttonText == 'Confirm Taken'
-                            ? "Confirm this dose was taken?"
-                            : "Do you want to mark this dose as taken?"),
+                                ? "Confirm this dose was taken?"
+                                : "Do you want to mark this dose as taken?"),
                             actions: [
                               TextButton(
-                                onPressed: () => Navigator.pop(context, false),
-                                child: Text("No")),
-                                TextButton(
+                                  onPressed: () =>
+                                      Navigator.pop(context, false),
+                                  child: Text("No")),
+                              TextButton(
                                   onPressed: () => Navigator.pop(context, true),
                                   child: Text("Yes")),
                             ],
@@ -370,56 +334,75 @@ class _HomepageStateContent extends State<Homepage> {
                         if (confirm != true) return;
 
                         final today = DateTime.now();
-                        final doseKey =
-                        '${sched.medicine.name}@${sched.time}_${today.year}-${today.month}-${today.day}';
-                    print(doseKey);
 
-                    String newStatus;
-                    if (status == 'missed') {
-                      newStatus = 'takenLate'; // first time marking a missed dose
-                    } else if (status == 'takenLate') {
-                      newStatus = 'takenLate'; // keep same status or confirm late
-                    } else {
-                      newStatus = 'taken'; // normal or already taken
-                    }
-
-                    final userBox = Hive.box<UserSettings>('settingsBox');
-                    final userSettings = userBox.get('user');
-                    if (userSettings == null) return;
-                    final childId = userSettings.childId;
-
-                        // Check if entry already exists
-                        HistoryEntry? entry = historyBox.get(doseKey);
-                        if (entry != null) {
-                          // Update existing entry
-                          entry.status = newStatus;
-                          entry.medicineId = sched.medicine.id; // ✅ set medicineId
-                          entry.childId = childId;             // ✅ set childId
-                          entry.time = sched.time;             // keep scheduled time
-                          await entry.save();
+                        final now = DateTime.now();
+                        final doseDateTime = DateTime(
+                          today.year,
+                          today.month,
+                          today.day,
+                          int.parse(sched.time.split(':')[0]),
+                          int.parse(sched.time.split(':')[1]),
+                        );
+                        String newStatus;
+                        if (doseDateTime.isBefore(now)) {
+                          // Past dose
+                          if (status == 'missed') {
+                            newStatus =
+                                'takenLate'; // marking missed dose as taken late
+                          } else if (status == 'takenLate' ||
+                              status == 'taken') {
+                            newStatus = status; // keep existing taken status
+                          } else {
+                            newStatus = 'taken'; // pending past dose
+                          }
                         } else {
-                          // Create new entry
+                          // Future dose
+                          newStatus = 'taken';
+                        }
+                        final userBox = Hive.box<UserSettings>('settingsBox');
+                        final childId = userBox.get('user')?.childId;
+
+                        final formattedDate =
+                            DateFormat('yyyy-MM-dd').format(today);
+                        final doseKey =
+                            '${sched.medicine.id}_${formattedDate}_${sched.time}_$childId';
+
+                        HistoryEntry? entry = historyBox.get(doseKey);
+
+                        if (entry != null) {
+                          entry.status = newStatus;
+                          entry.statusChanged =
+                              true; // <--- mark it for syncing
+                          // If it was previously missed, reset remoteId so it can sync as takenLate
+                          if (entry.status == 'takenLate') {
+                            entry.remoteId = null;
+                          }
+                        } else {
                           entry = HistoryEntry(
                             date: today,
                             time: sched.time,
-                            medicineName: sched.medicine.name, // do NOT include @time
-                            medicineId: sched.medicine.id,     // ✅ set medicineId
-                            childId: childId,                 // ✅ set childId
+                            medicineName: sched.medicine.name,
+                            medicineId: sched.medicine.id,
+                            childId: childId,
                             status: newStatus,
+                            remoteId:
+                                null, // always null for new or re-taken entries
+                            statusChanged: true,
                           );
-                          await historyBox.put(doseKey, entry);
                         }
+
+                        await historyBox.put(doseKey, entry);
 
                         if (newStatus == 'taken') {
                           final dose = int.tryParse(sched.medicine.dosage) ?? 1;
                           sched.medicine.quantityLeft =
-                          (sched.medicine.quantityLeft - dose).clamp(0, sched.medicine.quantityLeft);
+                              (sched.medicine.quantityLeft - dose)
+                                  .clamp(0, sched.medicine.quantityLeft);
                           await sched.medicine.save();
                         }
 
                         setState(() {}); // refresh tile
                       },
-
                     );
                   },
                   childCount: sortedMeds.length,
@@ -433,170 +416,175 @@ class _HomepageStateContent extends State<Homepage> {
     );
   }
 
-Widget _buildAppBar() {
-  return SliverAppBar(
-    leading: Builder(
-      builder: (context) => IconButton(
-        icon: const Icon(Icons.menu, color: Colors.white),
-        onPressed: () => Scaffold.of(context).openDrawer(),
-      ),
-    ),
-    actions: [
-      ValueListenableBuilder(
-        valueListenable: Hive.box<Medicine>('medicinesBox').listenable(),
-        builder: (context, box, _) {
-          final meds = box.values.toList();
-          final today = DateTime.now();
-
-          List<Map<String, dynamic>> allNotifs = [];
-
-          // Low stock & expiry
-          for (var med in meds) {
-            if (med.quantityLeft <= med.refillThreshold) {
-              allNotifs.add({
-                "id": "med_stock_${med.key}",
-                "title": med.name,
-                "subtitle": "Low stock: ${med.quantityLeft} left",
-                "icon": Icons.medication_liquid,
-                "color": Colors.blue,
-              });
-            }
-            if (med.expiryDate.isBefore(today.add(const Duration(days: 7)))) {
-              allNotifs.add({
-                "id": "med_expiry_${med.key}",
-                "title": med.name,
-                "subtitle":
-                    "Expiring on: ${med.expiryDate.toLocal().toString().split(' ')[0]}",
-                "icon": Icons.warning,
-                "color": Colors.red,
-              });
-            }
-          }
-
-          // Health checkup at start or end of month
-          if (today.day == 1 ||
-              today.day == DateTime(today.year, today.month + 1, 0).day) {
-            allNotifs.add({
-              "id": "extra_checkup",
-              "title": "It’s time for your monthly health checkup! 🩺",
-              "subtitle": "",
-              "icon": Icons.health_and_safety,
-              "color": Colors.green,
-            });
-          }
-
-          return badges.Badge(
-            position: badges.BadgePosition.topEnd(top: 3, end: 5),
-            showBadge: allNotifs.isNotEmpty,
-            badgeContent: Text(
-              allNotifs.length.toString(),
-              style: const TextStyle(color: Colors.white, fontSize: 16),
-            ),
-            child: IconButton(
-              icon: const Icon(Icons.notifications, color: Colors.white,size: 30,),
-              onPressed: () async {
-                await showDialog(
-                  context: context,
-                  builder: (_) {
-                    // Keep list mutable inside dialog
-                    List<Map<String, dynamic>> dialogNotifs =
-                        List.from(allNotifs);
-
-                    return StatefulBuilder(
-                      builder: (context, setState) {
-                        return AlertDialog(
-                          shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(12)),
-                          backgroundColor:
-                              const Color.fromARGB(255, 233, 251, 255),
-                          title: const Text(
-                            "Notifications",
-                            style: TextStyle(fontWeight: FontWeight.bold),
-                          ),
-                          content: SizedBox(
-                            width: double.maxFinite,
-                            child: dialogNotifs.isEmpty
-                                ? const Text("No notifications 🎉")
-                                : ListView.builder(
-                                    shrinkWrap: true,
-                                    itemCount: dialogNotifs.length,
-                                    itemBuilder: (context, index) {
-                                      final notif = dialogNotifs[index];
-                                      return Dismissible(
-                                        key: ValueKey(notif["id"]),
-                                        direction: DismissDirection.endToStart,
-                                        onDismissed: (_) {
-                                          setState(() {
-                                            dialogNotifs.removeAt(index);
-                                          });
-                                        },
-                                        background: Container(
-                                          color: Colors.red,
-                                          alignment: Alignment.centerRight,
-                                          padding: const EdgeInsets.symmetric(
-                                              horizontal: 20),
-                                          child: const Icon(Icons.delete,
-                                              color: Colors.white),
-                                        ),
-                                        child: ListTile(
-                                          leading: Icon(
-                                            notif["icon"] as IconData,
-                                            color: notif["color"] as Color,
-                                          ),
-                                          title: Text(
-                                            notif["title"].toString(),
-                                            style: const TextStyle(
-                                                fontWeight: FontWeight.bold),
-                                          ),
-                                          subtitle: notif["subtitle"]
-                                                  .toString()
-                                                  .isNotEmpty
-                                              ? Text(notif["subtitle"]
-                                                  .toString())
-                                              : null,
-                                        ),
-                                      );
-                                    },
-                                  ),
-                          ),
-                          actions: [
-                            TextButton(
-                              onPressed: () => Navigator.pop(context),
-                              child: const Text("Close"),
-                            ),
-                          ],
-                        );
-                      },
-                    );
-                  },
-                );
-              },
-            ),
-          );
-        },
-      ),
-    ],
-    pinned: true,
-    expandedHeight: 60.0,
-    backgroundColor: Colors.green[800],
-    elevation: 0,
-    centerTitle: true,
-    flexibleSpace: const FlexibleSpaceBar(
-      stretchModes: [StretchMode.zoomBackground],
-      expandedTitleScale: 1.8,
-      title: Text(
-        'MedRemind',
-        style: TextStyle(
-          color: Colors.white,
-          fontSize: 18,
-          fontWeight: FontWeight.bold,
-          letterSpacing: 1.2,
+  Widget _buildAppBar() {
+    return SliverAppBar(
+      leading: Builder(
+        builder: (context) => IconButton(
+          icon: const Icon(Icons.menu, color: Colors.white),
+          onPressed: () => Scaffold.of(context).openDrawer(),
         ),
       ),
-      titlePadding: EdgeInsets.only(left: 60, bottom: 18),
-    ),
-  );
-}
+      actions: [
+        ValueListenableBuilder(
+          valueListenable: Hive.box<Medicine>('medicinesBox').listenable(),
+          builder: (context, box, _) {
+            final meds = box.values.toList();
+            final today = DateTime.now();
+
+            List<Map<String, dynamic>> allNotifs = [];
+
+            // Low stock & expiry
+            for (var med in meds) {
+              if (med.quantityLeft <= med.refillThreshold) {
+                allNotifs.add({
+                  "id": "med_stock_${med.key}",
+                  "title": med.name,
+                  "subtitle": "Low stock: ${med.quantityLeft} left",
+                  "icon": Icons.medication_liquid,
+                  "color": Colors.blue,
+                });
+              }
+              if (med.expiryDate.isBefore(today.add(const Duration(days: 7)))) {
+                allNotifs.add({
+                  "id": "med_expiry_${med.key}",
+                  "title": med.name,
+                  "subtitle":
+                      "Expiring on: ${med.expiryDate.toLocal().toString().split(' ')[0]}",
+                  "icon": Icons.warning,
+                  "color": Colors.red,
+                });
+              }
+            }
+
+            // Health checkup at start or end of month
+            if (today.day == 1 ||
+                today.day == DateTime(today.year, today.month + 1, 0).day) {
+              allNotifs.add({
+                "id": "extra_checkup",
+                "title": "It’s time for your monthly health checkup! 🩺",
+                "subtitle": "",
+                "icon": Icons.health_and_safety,
+                "color": Colors.green,
+              });
+            }
+
+            return badges.Badge(
+              position: badges.BadgePosition.topEnd(top: 3, end: 5),
+              showBadge: allNotifs.isNotEmpty,
+              badgeContent: Text(
+                allNotifs.length.toString(),
+                style: const TextStyle(color: Colors.white, fontSize: 16),
+              ),
+              child: IconButton(
+                icon: const Icon(
+                  Icons.notifications,
+                  color: Colors.white,
+                  size: 30,
+                ),
+                onPressed: () async {
+                  await showDialog(
+                    context: context,
+                    builder: (_) {
+                      // Keep list mutable inside dialog
+                      List<Map<String, dynamic>> dialogNotifs =
+                          List.from(allNotifs);
+
+                      return StatefulBuilder(
+                        builder: (context, setState) {
+                          return AlertDialog(
+                            shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(12)),
+                            backgroundColor:
+                                const Color.fromARGB(255, 233, 251, 255),
+                            title: const Text(
+                              "Notifications",
+                              style: TextStyle(fontWeight: FontWeight.bold),
+                            ),
+                            content: SizedBox(
+                              width: double.maxFinite,
+                              child: dialogNotifs.isEmpty
+                                  ? const Text("No notifications 🎉")
+                                  : ListView.builder(
+                                      shrinkWrap: true,
+                                      itemCount: dialogNotifs.length,
+                                      itemBuilder: (context, index) {
+                                        final notif = dialogNotifs[index];
+                                        return Dismissible(
+                                          key: ValueKey(notif["id"]),
+                                          direction:
+                                              DismissDirection.endToStart,
+                                          onDismissed: (_) {
+                                            setState(() {
+                                              dialogNotifs.removeAt(index);
+                                            });
+                                          },
+                                          background: Container(
+                                            color: Colors.red,
+                                            alignment: Alignment.centerRight,
+                                            padding: const EdgeInsets.symmetric(
+                                                horizontal: 20),
+                                            child: const Icon(Icons.delete,
+                                                color: Colors.white),
+                                          ),
+                                          child: ListTile(
+                                            leading: Icon(
+                                              notif["icon"] as IconData,
+                                              color: notif["color"] as Color,
+                                            ),
+                                            title: Text(
+                                              notif["title"].toString(),
+                                              style: const TextStyle(
+                                                  fontWeight: FontWeight.bold),
+                                            ),
+                                            subtitle: notif["subtitle"]
+                                                    .toString()
+                                                    .isNotEmpty
+                                                ? Text(notif["subtitle"]
+                                                    .toString())
+                                                : null,
+                                          ),
+                                        );
+                                      },
+                                    ),
+                            ),
+                            actions: [
+                              TextButton(
+                                onPressed: () => Navigator.pop(context),
+                                child: const Text("Close"),
+                              ),
+                            ],
+                          );
+                        },
+                      );
+                    },
+                  );
+                },
+              ),
+            );
+          },
+        ),
+      ],
+      pinned: true,
+      expandedHeight: 60.0,
+      backgroundColor: Colors.green[800],
+      elevation: 0,
+      centerTitle: true,
+      flexibleSpace: const FlexibleSpaceBar(
+        stretchModes: [StretchMode.zoomBackground],
+        expandedTitleScale: 1.8,
+        title: Text(
+          'MedRemind',
+          style: TextStyle(
+            color: Colors.white,
+            fontSize: 18,
+            fontWeight: FontWeight.bold,
+            letterSpacing: 1.2,
+          ),
+        ),
+        titlePadding: EdgeInsets.only(left: 60, bottom: 18),
+      ),
+    );
+  }
 
   Widget _buildProgressBar(double progress, int taken, int total) {
     return Container(
@@ -764,73 +752,6 @@ Widget _buildAppBar() {
     );
   }
 
-//   Widget _scheduleTile(
-//     BuildContext context, {
-//     required String medicine,
-//     required String time,
-//     required String dosage,
-//     required bool taken,
-//     required VoidCallback onTap,
-//     required Color backgroundGreen,
-//     bool isMissed = false, // NEW PARAM
-//   }) {
-//     return Card(
-//       color: taken ? Color.fromARGB(255, 214, 245, 255) : Colors.white,
-//       elevation: 6,
-//       shadowColor: Colors.green.withOpacity(0.7),
-//       margin: const EdgeInsets.symmetric(horizontal: 18, vertical: 6),
-//       child: ListTile(
-//         leading: Icon(
-//           Icons.medication_liquid,
-//           color: isMissed ? Colors.red : Colors.green[700],
-//           size: 30,
-//         ),
-//         title: Text(
-//           "$medicine ($dosage ${int.tryParse(dosage) == 1 ? 'pill' : 'pills'})",
-//           style: TextStyle(
-//             fontSize: 16,
-//             fontWeight: FontWeight.w500,
-//             decoration: isMissed ? TextDecoration.lineThrough : null,
-//             color: isMissed ? Colors.grey[700] : null,
-//           ),
-//         ),
-//         subtitle: Text(
-//           time,
-//           style: TextStyle(
-//             fontSize: 13,
-//             color: isMissed ? Colors.red[700] : Colors.grey[600],
-//             fontWeight: isMissed ? FontWeight.bold : FontWeight.normal,
-//           ),
-//         ),
-//         trailing: ElevatedButton(
-//           onPressed: (taken || isMissed) ? null : onTap,
-//           style: ElevatedButton.styleFrom(
-//             backgroundColor: taken
-//                 ? backgroundGreen
-//                 : isMissed
-//                     ? Colors.red[400]
-//                     : Colors.yellow[600],
-//             foregroundColor: Colors.white,
-//             shape: RoundedRectangleBorder(
-//               borderRadius: BorderRadius.circular(20),
-//             ),
-//           ),
-//           child: Padding(
-//             padding: const EdgeInsets.symmetric(horizontal: 8.0),
-//             child: Text(
-//               taken
-//                   ? "Taken"
-//                   : isMissed
-//                       ? "Missed"
-//                       : "Take",
-//               style: TextStyle(color: Colors.black),
-//             ),
-//           ),
-//         ),
-//       ),
-//     );
-//   }
-// }
   Widget _scheduleTile(
     BuildContext context, {
     required String medicine,

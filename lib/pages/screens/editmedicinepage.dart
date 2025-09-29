@@ -2,8 +2,11 @@ import 'package:flutter/material.dart';
 import 'package:hive/hive.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../Hivemodel/alarm_model.dart';
+import '../../Hivemodel/history_entry.dart';
 import '../../Hivemodel/medicine.dart';
+import '../../Hivemodel/user_settings.dart';
 import '../../reminder/services/alarm_service.dart';
+import '../../services/fetch_and_store_medicine.dart';
 import '../../utils/customsnackbar.dart';
 
 class EditMedicinePage extends StatefulWidget {
@@ -132,7 +135,7 @@ class _EditMedicinePageState extends State<EditMedicinePage> {
       });
     }
   }
-
+//-------------------------------------------------
   void _saveChanges() async {
     setState(() => _isediting = true);
 
@@ -154,14 +157,13 @@ class _EditMedicinePageState extends State<EditMedicinePage> {
     }
 
     try {
-      // Format new times
       final doseTimes = _doseTimes
           .take(_timesPerDay!)
           .map((t) =>
               "${t!.hour.toString().padLeft(2, '0')}:${t.minute.toString().padLeft(2, '0')}")
           .toList();
 
-      // ✅ Update existing medicine object
+      // 1️⃣ Update Hive Medicine object
       final med = widget.medicine;
       med.name = _nameController.text.trim();
       med.dosage = _dosageController.text.trim();
@@ -171,28 +173,21 @@ class _EditMedicinePageState extends State<EditMedicinePage> {
       med.quantityLeft = int.parse(_stockController.text.trim());
       med.refillThreshold = int.parse(_thresholdController.text.trim());
       med.instructions = _instructionsController.text.trim();
+      await med.save();
 
-      await med.save(); // saves the same Hive object
-
-      // ✅ Update alarms
+      // 2️⃣ Update alarms
       final alarmBox = Hive.box<AlarmModel>('alarms');
-
-      // Remove old alarms for this medicine
       final oldAlarms = alarmBox.values
           .where((alarm) => alarm.medicineName == med.name)
           .toList();
-
       for (var alarm in oldAlarms) {
         await AlarmService.deleteAlarm(alarm.id);
         await alarmBox.delete(alarm.id);
       }
-
-      // Add new alarms
       for (var i = 0; i < doseTimes.length; i++) {
         final parts = doseTimes[i].split(":");
         final hour = int.parse(parts[0]);
         final minute = int.parse(parts[1]);
-
         final alarmId = DateTime.now().millisecondsSinceEpoch.remainder(100000);
 
         final newAlarm = AlarmModel(
@@ -205,15 +200,126 @@ class _EditMedicinePageState extends State<EditMedicinePage> {
               : "Time to take the medicine - ${med.name}",
           hour: hour,
           minute: minute,
-          isRepeating: true,
-          isActive: true,
+          isRepeating: _isRepeating,
+          isActive: _enableReminder,
           selectedDays: List.from(_selectedDays),
         );
 
+        await alarmBox.put(alarmId, newAlarm);
         await AlarmService.saveAlarm(newAlarm);
       }
 
-      // ✅ Sync with Supabase
+      // 3️⃣ Update history entries
+      final historyBox = Hive.box<HistoryEntry>('historyBox');
+      final userBox = Hive.box<UserSettings>('settingsBox');
+      final userSettings = userBox.get('user');
+      if (userSettings == null) return;
+      final childId = userSettings.childId;
+      final now = DateTime.now();
+
+      // Reset future doses (after now) for this medicine
+      final futureKeys = historyBox.keys.where((key) {
+        final entry = historyBox.get(key);
+        if (entry == null) return false;
+        if (entry.medicineName != med.name) return false;
+        final entryDateTime = DateTime(
+          entry.date.year,
+          entry.date.month,
+          entry.date.day,
+          int.parse(entry.time?.split(':')[0] ?? '0'),
+          int.parse(entry.time?.split(':')[1] ?? '0'),
+        );
+        return entryDateTime.isAfter(now);
+      }).toList();
+
+      for (var key in futureKeys) {
+        historyBox.delete(key);
+      }
+
+    
+      for (var timeStr in doseTimes) {
+        final parts = timeStr.split(":");
+        final hour = int.parse(parts[0]);
+        final minute = int.parse(parts[1]);
+        final doseDateTime = DateTime(
+          now.year,
+          now.month,
+          now.day,
+          hour,
+          minute,
+        );
+
+        final doseKey = buildDoseKey(med.id, doseDateTime, timeStr, childId);
+
+        final isPast = doseDateTime.isBefore(now);
+
+        // if (historyBox.containsKey(doseKey)) {
+        //   final entry = historyBox.get(doseKey)!;
+
+        //   // Update status depending on time
+        //   if (entry.status == 'taken' || entry.status == 'takenLate') {
+        //     // Only keep taken statuses if the doseDateTime <= original taken time
+        //     if (doseDateTime.isAfter(now)) {
+        //       // new future dose → reset
+        //       entry.status = "pending";
+        //       entry.statusChanged = true;
+        //       entry.remoteId = null;
+        //     }
+        //   } else {
+        //     entry.status = isPast ? "missed" : "pending";
+        //     entry.statusChanged = true;
+        //     entry.remoteId = null;
+        //   }
+
+        //   entry.statusChanged = true;
+        //   entry.remoteId = null;
+        //   await historyBox.put(doseKey, entry);
+        // } else {
+        //   final newEntry = HistoryEntry(
+        //     date: doseDateTime,
+        //     medicineName: med.name,
+        //     medicineId: med.id,
+        //     status: isPast ? "missed" : "pending",
+        //     time: timeStr,
+        //     childId: childId,
+        //   );
+        //   await historyBox.put(doseKey, newEntry);
+        // }
+
+if (historyBox.containsKey(doseKey)) {
+  final entry = historyBox.get(doseKey)!;
+
+  if (doseDateTime.isAfter(now)) {
+    // Future dose → reset to pending, make clickable
+    entry.status = "pending";
+  } else {
+    // Past dose
+    if (entry.status != 'taken' && entry.status != 'takenLate') {
+      entry.status = "missed";
+    }
+    // taken/takenLate in past → keep as is
+  }
+
+  entry.statusChanged = true;
+  entry.remoteId = null;
+  await historyBox.put(doseKey, entry);
+} else {
+  // New entry
+  final newEntry = HistoryEntry(
+    date: doseDateTime,
+    medicineName: med.name,
+    medicineId: med.id,
+    status: isPast ? "missed" : "pending",
+    time: timeStr,
+    childId: childId,
+  );
+  await historyBox.put(doseKey, newEntry);
+}
+
+
+      }
+
+      // 4️⃣ Sync with Supabase
       await Supabase.instance.client.from('medicine').update({
         'name': med.name,
         'dosage': med.dosage,
@@ -222,6 +328,7 @@ class _EditMedicinePageState extends State<EditMedicinePage> {
         'total_quantity': med.totalQuantity,
         'quantity_left': med.quantityLeft,
         'refill_threshold': med.refillThreshold,
+        'instructions': med.instructions,
       }).eq('id', widget.medicineKey);
 
       AppSnackbar.show(context,

@@ -128,6 +128,9 @@ class _AddMedicinePageState extends State<AddMedicinePage> {
         'quantity_left': int.parse(_quantityController.text),
         'refill_threshold': int.parse(_thresholdController.text),
         'created_at': DateTime.now().toIso8601String(),
+        'instructions': _instructionsController.text.trim().isEmpty
+            ? null
+            : _instructionsController.text.trim(),
       }).select();
 
       if (response.isEmpty) {

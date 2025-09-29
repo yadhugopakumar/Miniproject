@@ -593,10 +593,9 @@ class VoiceChatManager {
       String currentChildId = session.get('childId', defaultValue: '');
 // 1️⃣ Start Add Medicine Flow
       if (text.contains("add medicine") || text.contains("new medicine")) {
-        _mode = VoiceMode.addMedicine;
-        _step = 0;
         _answers.clear();
-        String prompt = "Let's add a new medicine. What is the medicine name?";
+        String prompt = "Go to Add Medicine page to add a new medicine, "
+            "or go to the Chat page to add medicine from the prescription list.";
         await _speak(prompt);
         return prompt;
       }

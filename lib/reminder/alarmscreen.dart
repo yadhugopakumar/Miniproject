@@ -123,11 +123,18 @@ class _AlarmRingScreenState extends State<AlarmRingScreen>
     await _stopAlarmAndVibration();
 
     final alarm = widget.alarm;
-    final time =
-        '${alarm.hour.toString().padLeft(2, '0')}:${alarm.minute.toString().padLeft(2, '0')}';
+    // final time =
+    //     '${alarm.hour.toString().padLeft(2, '0')}:${alarm.minute.toString().padLeft(2, '0')}';
+        final missedTime = DateTime(
+          DateTime.now().year,
+          DateTime.now().month,
+          DateTime.now().day,
+          alarm.hour,
+        alarm.minute,
+        );
 
     // Mark missed in history
-    await HistoryService.updateHistoryStatus(alarm.medicineName, time, "missed");
+    await HistoryService.updateHistoryStatus(alarm.medicineName, missedTime, "missed");
 
     // Update alarm model state for UI
     alarm.lastAction = 'missed';

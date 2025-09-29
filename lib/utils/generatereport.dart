@@ -89,13 +89,14 @@ Future<File?> generateMonthlyReportPdf(
       .toList();
 
 // Step 2: build table data
+
   final expiringMedicines = expiringMeds
       .map((med) => [
             med.name,
             med.dosage,
             med.quantityLeft.toString(),
             DateFormat('dd MMM yyyy').format(med.expiryDate),
-            med.instructions ?? '-',
+            med.instructions ?? 'Take Before Food',
           ])
       .toList();
 

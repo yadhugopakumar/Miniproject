@@ -54,13 +54,13 @@ class _ChatpageState extends State<Chatpage> with TickerProviderStateMixin {
     _setupScrollListener();
     _showWelcomeMessage = true;
     // Call scroll after a delay to ensure everything is built
-    Future.delayed(const Duration(milliseconds: 500), () {
+    Future.delayed(const Duration(milliseconds: 200), () {
       _scrollToBottomAfterBuild();
     });
 
     _dotsController = AnimationController(
       vsync: this,
-      duration: const Duration(milliseconds: 2000),
+      duration: const Duration(milliseconds: 1500),
     )..repeat(); // keeps looping
   }
 
@@ -94,7 +94,7 @@ class _ChatpageState extends State<Chatpage> with TickerProviderStateMixin {
       Future.delayed(const Duration(milliseconds: 100), () {
         if (_scrollController.hasClients && mounted) {
           final double maxExtent =
-              _scrollController.position.maxScrollExtent + 100;
+              _scrollController.position.maxScrollExtent ;
           _scrollController.jumpTo(maxExtent);
           print("Scrolled to: $maxExtent"); // Debug print
         }

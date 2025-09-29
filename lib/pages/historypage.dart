@@ -1,11 +1,13 @@
 import 'package:flutter/material.dart';
 import 'package:hive_flutter/hive_flutter.dart';
 import 'package:intl/intl.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../Hivemodel/history_entry.dart';
 import '../Hivemodel/medicine.dart';
 import '../services/hive_services.dart';
 import '../services/fetch_and_store_medicine.dart';
+import '../../Hivemodel/user_settings.dart';
 
 class HistoryPage extends StatefulWidget {
   const HistoryPage({super.key});
@@ -20,71 +22,86 @@ class _HistoryPageState extends State<HistoryPage> {
   @override
   void initState() {
     super.initState();
-    _populateMissedEntries();
-    pushUnsyncedHistoryToSupabase();
+    _initHistory();
   }
 
-  // void _populateMissedEntries() {
-  //   final history = Hive.box<HistoryEntry>(historyBox);
-  //   final medicines = Hive.box<Medicine>(medicinesBox);
-  //
-  //   final now = DateTime.now();
-  //   final todayKey = "${now.year}-${now.month}-${now.day}";
-  //   final currentTime =
-  //       "${now.hour.toString().padLeft(2, '0')}:${now.minute.toString().padLeft(2, '0')}";
-  //
-  //   for (var med in medicines.values) {
-  //     for (var time in med.dailyIntakeTimes) {
-  //       final doseKey = "${med.name}@${time}_$todayKey";
-  //
-  //       if (!history.containsKey(doseKey) && time.compareTo(currentTime) < 0) {
-  //         history.put(
-  //           doseKey,
-  //           HistoryEntry(
-  //             // medicineId: med.id,
-  //             date: now,
-  //             medicineName: "${med.name}@$time",
-  //             status: 'missed',
-  //           ),
-  //         );
-  //       }
-  //     }
-  //   }
-  // }
-  void _populateMissedEntries() {
-    final history = Hive.box<HistoryEntry>(historyBox);
-    final medicines = Hive.box<Medicine>(medicinesBox);
+  Future<void> _initHistory() async {
+    _populateMissedEntries();
+    await syncHistoryToSupabase();
+    if (!mounted) return;
 
-    final now = DateTime.now();
-    final todayKey = DateFormat('yyyy-MM-dd').format(now); // zero-padded date
-    final currentTime =
-    "${now.hour.toString().padLeft(2, '0')}:${now.minute.toString().padLeft(2, '0')}";
+    setState(() {}); // refresh UI safely
+  }
 
-  for (var med in medicines.values) {
-    final medId = med.id ?? med.name; // fallback if no ID
+  Future<void> syncHistoryToSupabase() async {
+    final supabase = Supabase.instance.client;
+    final historyBox = Hive.box<HistoryEntry>('historyBox');
 
-    for (var time in med.dailyIntakeTimes) {
-      final doseKey = "${medId}_${todayKey}_$time";
+    final entriesToSync = historyBox.values.toList();
+    if (entriesToSync.isEmpty) return;
 
-      // only mark as missed if time has passed and entry doesn’t already exist
-      if (!history.containsKey(doseKey) && time.compareTo(currentTime) < 0) {
-        history.put(
-          doseKey,
-          HistoryEntry(
-            date: now,
-            medicineName: med.name, // ✅ plain name only
-            time: time,             // ✅ store time separately
-            status: 'missed',
-            medicineId: med.id,
-            childId: null, // set if you have user/child context
-            remoteId: null,
-          ),
-        );
+    for (var entry in entriesToSync) {
+      try {
+        // New or status changed entry
+        if (entry.remoteId == null || entry.statusChanged) {
+          await supabase.from('history_entry').upsert({
+            'child_id': entry.childId,
+            'medicine_id': entry.medicineId,
+            'medicine_name': entry.medicineName,
+            'date': entry.date.toIso8601String(),
+            'time': entry.time,
+            'status': entry.status,
+          }, onConflict: 'medicine_id,date,time') // uses unique constraint
+              .select();
+
+          // Reset Hive flag
+          entry.statusChanged = false;
+          await entry.save();
+
+          print('✅ Entry synced/upserted: ${entry.medicineName}');
+        }
+      } catch (e) {
+        print('❌ Error syncing entry ${entry.medicineName}: $e');
       }
     }
   }
-  }
 
+  void _populateMissedEntries() {
+    final history = Hive.box<HistoryEntry>(historyBox);
+    final medicines = Hive.box<Medicine>(medicinesBox);
+    final userBox = Hive.box<UserSettings>('settingsBox');
+    final userSettings = userBox.get('user');
+    if (userSettings == null) return;
+    final childId = userSettings.childId;
+
+    final now = DateTime.now();
+    final currentTime =
+        "${now.hour.toString().padLeft(2, '0')}:${now.minute.toString().padLeft(2, '0')}";
+
+    for (var med in medicines.values) {
+      final medId = med.id;
+
+      for (var time in med.dailyIntakeTimes) {
+        final doseKey = buildDoseKey(medId, now, time, childId);
+
+        // only mark as missed if time has passed and entry doesn’t already exist
+        if (!history.containsKey(doseKey) && time.compareTo(currentTime) < 0) {
+          history.put(
+            doseKey,
+            HistoryEntry(
+              date: now,
+              medicineName: med.name, // plain name only
+              time: time,
+              status: 'missed',
+              medicineId: med.id,
+              childId: childId, // set childId consistently
+              remoteId: null,
+            ),
+          );
+        }
+      }
+    }
+  }
 
   bool _filterEntry(HistoryEntry entry) {
     switch (selectedFilter) {
@@ -189,24 +206,21 @@ class _HistoryPageState extends State<HistoryPage> {
                               ),
                               const Divider(),
                               ...meds.map((entry) {
-                                String medName = entry.medicineName;
-                                String timeStr = '';
-                                if (medName.contains('@')) {
-                                  final parts = medName.split('@');
-                                  medName = parts[0];
-                                  timeStr = parts.length > 1 ? parts[1] : '';
-                                }
+                                final medName =
+                                    entry.medicineName; // just the name
+                                final timeStr =
+                                    entry.time; // use the stored time directly
 
                                 // Format time
                                 String formattedTime = '';
-                                if (timeStr.isNotEmpty) {
+                                if (timeStr != null && timeStr.isNotEmpty) {
                                   final parts = timeStr.split(':');
                                   if (parts.length == 2) {
                                     final hour = int.tryParse(parts[0]) ?? 0;
                                     final minute = int.tryParse(parts[1]) ?? 0;
                                     final dt = DateTime(0, 0, 0, hour, minute);
-                                    formattedTime =
-                                        "${DateFormat.jm().format(dt)}"; // e.g., 8:30 AM
+                                    formattedTime = DateFormat.jm()
+                                        .format(dt); // e.g., 8:30 AM
                                   }
                                 }
 

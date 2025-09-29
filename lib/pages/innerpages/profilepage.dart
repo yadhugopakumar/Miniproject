@@ -613,51 +613,7 @@ class _ProfilepageState extends State<Profilepage> {
                         ),
                       ],
                     ),
-                    child: Column(
-                      children: [
-                        Padding(
-                          padding: const EdgeInsets.all(20),
-                          child: Row(
-                            children: [
-                              Icon(Icons.settings, color: Colors.grey[700]),
-                              const SizedBox(width: 12),
-                              Text(
-                                "Actions",
-                                style: TextStyle(
-                                  fontSize: 18,
-                                  fontWeight: FontWeight.bold,
-                                  color: Colors.grey[800],
-                                ),
-                              ),
-                            ],
-                          ),
-                        ),
-                        Padding(
-                          padding: const EdgeInsets.fromLTRB(20, 0, 20, 20),
-                          child: SizedBox(
-                            width: double.infinity,
-                            child: ElevatedButton.icon(
-                              onPressed: () {
-                                _showFlush(
-                                    "Profile update feature coming soon!");
-                              },
-                              icon: const Icon(Icons.edit),
-                              label: const Text("Edit Profile"),
-                              style: ElevatedButton.styleFrom(
-                                backgroundColor: Colors.blue[700],
-                                foregroundColor: Colors.white,
-                                padding:
-                                    const EdgeInsets.symmetric(vertical: 16),
-                                shape: RoundedRectangleBorder(
-                                  borderRadius: BorderRadius.circular(12),
-                                ),
-                                elevation: 2,
-                              ),
-                            ),
-                          ),
-                        ),
-                      ],
-                    ),
+                    
                   ),
 
                   const SizedBox(height: 32),

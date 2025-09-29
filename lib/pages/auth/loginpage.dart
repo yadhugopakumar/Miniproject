@@ -6,6 +6,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../Hivemodel/alarm_model.dart';
 import '../../Hivemodel/medicine.dart';
 import '../../reminder/services/alarm_service.dart';
+import '../../services/fetch_and_store_medicine.dart';
 import '../../utils/customsnackbar.dart';
 import '../../utils/successdialogue.dart';
 import 'loginforgotpassword.dart';
@@ -117,6 +118,7 @@ class _LoginPageState extends State<LoginPage> {
 
   Future<void> _fetchMedicinesAndScheduleAlarms(String childId) async {
     try {
+
       final supabase = Supabase.instance.client;
 
       // Fetch medicines for this child
@@ -186,6 +188,8 @@ class _LoginPageState extends State<LoginPage> {
           }
         }
       }
+
+       fetchAndStoreRecentHistory();
     } catch (e, st) {
       debugPrint("❌ Failed to fetch medicines or schedule alarms: $e");
       debugPrintStack(stackTrace: st);

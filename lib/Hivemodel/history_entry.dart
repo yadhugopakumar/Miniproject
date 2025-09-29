@@ -27,6 +27,9 @@ class HistoryEntry extends HiveObject {
   @HiveField(7)
   String? childId; // Which child this entry belongs to
 
+  @HiveField(8)
+  bool statusChanged = false;
+
   HistoryEntry({
     required this.date,
     required this.medicineName,
@@ -36,5 +39,6 @@ class HistoryEntry extends HiveObject {
     this.medicineId,
     this.remoteId,
     this.childId,
+    this.statusChanged = false,
   });
 }
