@@ -434,6 +434,7 @@ export default function Header({ onMemberAdded, onMedicineAdded }) {
       }
 
       // --- INSERT ---
+      const parentId = sessionStorage.getItem("user_id");
       const { data, error } = await supabase
         .from("medicine")
         .insert([
@@ -446,6 +447,7 @@ export default function Header({ onMemberAdded, onMedicineAdded }) {
             total_quantity: Number(formData.total_quantity),
             quantity_left: Number(formData.total_quantity),
             refill_threshold: Number(formData.refill_threshold),
+            parent_id:parentId,
           }
         ])
         .select()
