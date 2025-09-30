@@ -18,6 +18,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import '../chatmanager/chat_manager.dart';
 import '../chatmanager/voice_chat_overlay.dart';
 
+import 'Hivemodel/health_report.dart';
 import 'Hivemodel/history_entry.dart';
 import 'Hivemodel/medicine.dart';
 import 'Hivemodel/user_settings.dart';
@@ -174,7 +175,6 @@ class _BottomnavbarState extends State<Bottomnavbar>
                 onPressed: () {
                   _player.stop();
                   Navigator.pop(context);
-
                 },
                 child: const Text("Cancel"),
               ),
@@ -198,7 +198,6 @@ class _BottomnavbarState extends State<Bottomnavbar>
       },
     );
   }
-
 
   /// Save vibration preference
   Future<void> saveVibrationPref(bool value) async {
@@ -793,6 +792,8 @@ class _BottomnavbarState extends State<Bottomnavbar>
                                 await Hive.box<HistoryEntry>('historyBox')
                                     .clear();
                                 await Hive.box<ChatMessage>('chatMessages')
+                                    .clear();
+                                await Hive.box<HealthReport>('healthReportsBox')
                                     .clear();
                                 await Hive.box<AlarmModel>('alarms').clear();
                                 await Hive.box('session').clear();

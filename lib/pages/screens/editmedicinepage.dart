@@ -321,6 +321,7 @@ if (historyBox.containsKey(doseKey)) {
 
       // 4️⃣ Sync with Supabase
       await Supabase.instance.client.from('medicine').update({
+        
         'name': med.name,
         'dosage': med.dosage,
         'expiry_date': med.expiryDate.toIso8601String(),

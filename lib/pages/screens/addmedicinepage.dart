@@ -79,6 +79,7 @@ class _AddMedicinePageState extends State<AddMedicinePage> {
         return;
       }
       final childId = userSettings.childId;
+      final parentId = userSettings.parentId;
 
       // 2️⃣ Validate form & selections
       bool allTimesSelected = _timesPerDay != null &&
@@ -120,6 +121,7 @@ class _AddMedicinePageState extends State<AddMedicinePage> {
       final supabase = Supabase.instance.client;
       final response = await supabase.from('medicine').insert({
         'child_id': childId,
+        'parent_id': parentId,
         'name': name,
         'dosage': dosage,
         'expiry_date': _selectedDate!.toIso8601String(),

@@ -63,10 +63,15 @@ class _LoginPageState extends State<LoginPage> {
             message: "Invalid phone or PIN", success: false);
         return;
       }
+      final pidResponse = await supabase
+          .from('child_users')
+          .select('parent_id')
+          .eq('id', response['child_id'])
+          .maybeSingle();
 
       // Map response data to UserSettings model
       final userSettings = UserSettings(
-        parentId: response['parent_id'] ?? '',
+        parentId: pidResponse?['parent_id'],
         username: response['username'] ?? '',
         pin: response['pin'] ?? '', // Store hashed if implemented
         alarmSound: response['alarm_sound'] ?? 'default_alarm.mp3',
@@ -76,7 +81,6 @@ class _LoginPageState extends State<LoginPage> {
         parentEmail: response['parent_email'] ?? '',
         childId: response['child_id'], // <-- store child_id
       );
-
       // Store fetched user settings locally in Hive
       await userBox.put('user', userSettings);
 
@@ -118,7 +122,6 @@ class _LoginPageState extends State<LoginPage> {
 
   Future<void> _fetchMedicinesAndScheduleAlarms(String childId) async {
     try {
-
       final supabase = Supabase.instance.client;
 
       // Fetch medicines for this child
@@ -189,7 +192,7 @@ class _LoginPageState extends State<LoginPage> {
         }
       }
 
-       fetchAndStoreRecentHistory();
+      fetchAndStoreRecentHistory();
     } catch (e, st) {
       debugPrint("❌ Failed to fetch medicines or schedule alarms: $e");
       debugPrintStack(stackTrace: st);
