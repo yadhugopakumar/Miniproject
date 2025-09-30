@@ -1,3 +1,4 @@
+
 import { useNavigate } from "react-router-dom";
 
 export default function MemberCardsGrid({ members = [] }) {
@@ -31,20 +32,27 @@ export default function MemberCardsGrid({ members = [] }) {
               </div>
             </div>
           </div>
+          
+          {/* --- DYNAMIC STATS UPDATE --- */}
           <div className="mb-4 flex space-x-4">
             <div>
               <div className="text-sm text-gray-700 font-medium">Missed</div>
-              <div className="text-lg text-red-500 font-bold">2</div>
+              {/* Using member.stats.missed */}
+              <div className="text-lg text-red-500 font-bold">{member.stats?.missed ?? 0}</div>
             </div>
             <div>
               <div className="text-sm text-gray-700 font-medium">Taken</div>
-              <div className="text-lg text-green-600 font-bold">25</div>
+              {/* Using member.stats.taken */}
+              <div className="text-lg text-green-600 font-bold">{member.stats?.taken ?? 0}</div>
             </div>
             <div>
               <div className="text-sm text-gray-700 font-medium">Late</div>
-              <div className="text-lg text-yellow-500 font-bold">1</div>
+              {/* Using member.stats.late */}
+              <div className="text-lg text-yellow-500 font-bold">{member.stats?.late ?? 0}</div>
             </div>
           </div>
+          {/* --- END DYNAMIC STATS UPDATE --- */}
+          
           <button
             className="w-full bg-green-600 hover:bg-green-700 text-white font-medium py-2 px-4 rounded-lg transition-colors duration-200 focus:outline-none focus:ring-4 focus:ring-green-200"
             onClick={(e) => {

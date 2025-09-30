@@ -1,4 +1,5 @@
 
+
 import { useState, useEffect } from "react";
 import { supabase } from "../supabase/supabase-client";
 import Header from "../components/header";
@@ -26,48 +27,74 @@ export default function MedicineStockPage() {
 
   // ----fetch medicines and users on startup-----------
   useEffect(() => {
-    fetchUsers();
-    fetchMedicines();
+    // FIX: Serialize the fetch calls to prevent the Navigator LockManager race condition
+    async function initialFetch() {
+      // Fetch users first
+      await fetchUsers();
+      // Then fetch medicines, potentially filtered
+      await fetchMedicines();
+    }
+    initialFetch();
+
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
 
   async function fetchMedicines(userId = "") {
     setLoading(true);
 
-    // get parentId from session/localStorage (set at login)
     const parentId = sessionStorage.getItem("user_id");
+    if (!parentId) {
+      console.error("Parent ID not found in sessionStorage.");
+      setLoading(false);
+      return;
+    }
+
     let query = supabase
       .from("medicine")
       .select(`
         *,
         child_users(username)
       `)
-      .eq("parent_id", parentId) // ✅ only fetch medicines created by this parent
+      .eq("parent_id", parentId)
       .order("created_at", { ascending: false });
-     
- 
+
+
     if (userId) {
-      query = query.eq("child_id", userId); // optional filter by child
+      query = query.eq("child_id", userId);
     }
 
     const { data, error } = await query;
-    if (!error) setMedicines(data);
-    console.log(medicines);
-    
+
+    if (error) {
+      console.error("Supabase Error fetching medicines:", error);
+      showError("Failed to fetch medicines: " + error.message);
+      setMedicines([]);
+    } else {
+      setMedicines(data || []);
+    }
+
     setLoading(false);
   }
 
 
   async function fetchUsers() {
+    const parentId = sessionStorage.getItem("user_id");
+    if (!parentId) return;
+
     let { data, error } = await supabase
       .from("child_users")
-      .select("id, username").eq("parent_id", sessionStorage.getItem("user_id"))
+      .select("id, username")
+      .eq("parent_id", parentId)
       .order("username", { ascending: true });
 
-    if (!error) setUsers(data);
+    if (error) {
+      console.error("Supabase Error fetching users:", error);
+    } else {
+      setUsers(data || []);
+    }
   }
   // ----fetch medicines and users on startup-----------
-
 
 
   // ---------new medicine add,helper----------------
@@ -86,7 +113,9 @@ export default function MedicineStockPage() {
   const editMedicine = (id) => {
     const med = medicines.find((m) => m.id === id);
     if (med) {
-      setSelectedMed({ ...med });
+      // Retain the child_users object when editing
+      const childUser = med.child_users;
+      setSelectedMed({ ...med, child_users: childUser });
       setShowModal(true);
     }
   };
@@ -106,29 +135,27 @@ export default function MedicineStockPage() {
       showError("Medicine name must be at least 2 characters.");
       return;
     }
-
     if (isNaN(selectedMed.dosage) || Number(selectedMed.dosage) <= 0) {
       showError("Dosage must be a valid number greater than 0.");
       return;
     }
-
     if (isNaN(selectedMed.total_quantity) || Number(selectedMed.total_quantity) < 0) {
       showError("Total quantity must be a non-negative number.");
       return;
     }
-
     if (isNaN(selectedMed.refill_threshold) || Number(selectedMed.refill_threshold) < 0) {
       showError("Refill threshold must be a non-negative number.");
       return;
     }
-
     if (Number(selectedMed.refill_threshold) > Number(selectedMed.total_quantity)) {
       showError("Refill threshold cannot be greater than total quantity.");
       return;
     }
-
+    const parentId = sessionStorage.getItem("user_id");
+    console.log(parentId);
+    
     // --- SUPABASE UPDATE ---
-    const { data, error } = await supabase
+    const { error } = await supabase
       .from("medicine")
       .update({
         name: selectedMed.name.trim(),
@@ -136,13 +163,20 @@ export default function MedicineStockPage() {
         expiry_date: selectedMed.expiry_date,
         daily_intake_times: selectedMed.daily_intake_times,
         total_quantity: Number(selectedMed.total_quantity),
-        refill_threshold: Number(selectedMed.refill_threshold)
+        refill_threshold: Number(selectedMed.refill_threshold),
+        parent_id:parentId
       })
       .eq("id", selectedMed.id);
 
     if (!error) {
+      // Retain the child_users object for display after update
+      const updatedMed = {
+        ...selectedMed,
+        child_users: medicines.find(m => m.id === selectedMed.id)?.child_users
+      };
+
       setMedicines((prev) =>
-        prev.map((m) => (m.id === selectedMed.id ? selectedMed : m))
+        prev.map((m) => (m.id === selectedMed.id ? updatedMed : m))
       );
       showSuccess("Medicine updated successfully!");
       closeModal();
@@ -178,7 +212,6 @@ export default function MedicineStockPage() {
   };
   //  ----------------delete medicine by id-----------------
 
-
   return (
     <main>
       <Header onMedicineAdded={handleMedicineAdded} />
@@ -208,12 +241,15 @@ export default function MedicineStockPage() {
         {/* -----------------Table schema--------------------*/}
         {loading ? (
           <div className="h-[60vh] flex flex-col items-center justify-center">
-            <div className="animate-spin rounded-full h-20 w-20 border-t-5 border-green-600"></div>
-            <span className="mt-4 text-gray-700 font-medium">Loading Medicines ...</span>
+            <div className="animate-spin rounded-full h-20 w-20 border-4 border-t-4 border-green-600"></div>
+            <span className="mt-4 text-gray-700 font-medium">Loading Medicines...</span>
           </div>
         ) : medicines.length === 0 ? (
           <div className="h-[60vh] flex flex-col items-center justify-center text-gray-600">
-            <span className="text-lg font-medium">No records found</span>
+            <span className="text-lg font-medium">No medicine records found.</span>
+            {selectedUser && (
+              <span className="text-sm mt-2">Check 'All Users' or add a new medicine.</span>
+            )}
           </div>
         ) : (
           <div className="overflow-x-auto custom-scroll">
@@ -232,7 +268,11 @@ export default function MedicineStockPage() {
               </thead>
               <tbody>
                 {medicines.map((med) => {
-                  const isLow = med.quantity_left <= med.refill_threshold;
+                  const quantityLeft = med.quantity_left !== undefined ? med.quantity_left : 0;
+                  const refillThreshold = med.refill_threshold !== undefined ? med.refill_threshold : 0;
+                  const totalQuantity = med.total_quantity !== undefined ? med.total_quantity : 0;
+
+                  const isLow = quantityLeft <= refillThreshold;
                   return (
                     <tr key={med.id} className="hover:bg-gray-100" style={{ height: "max-content" }}>
 
@@ -255,10 +295,10 @@ export default function MedicineStockPage() {
                       </td>
 
                       <td className="px-1 text-center border">{med.dosage} Pill</td>
-                      <td className="px-1 text-center border">{med.expiry_date}</td>
+                      <td className="px-1 text-center border">{med.expiry_date || 'N/A'}</td>
                       <td className="px-1 text-center border">{med.child_users?.username}</td>
-                      <td className="px-1 text-center border p-2" style={{ width: "170px", minWidth: "110px" }}>{med.daily_intake_times.join(", ")}</td>
-                      <td className="px-1 text-center border">{med.quantity_left}/{med.total_quantity}</td>
+                      <td className="px-1 text-center border p-2" style={{ width: "170px", minWidth: "110px" }}>{med.daily_intake_times ? med.daily_intake_times.join(", ") : 'N/A'}</td>
+                      <td className="px-1 text-center border">{quantityLeft}/{totalQuantity}</td>
                       <td
                         className={`text-center border font-semibold  ${isLow ? "text-red-600" : "text-green-600"
                           }`}
@@ -305,6 +345,30 @@ export default function MedicineStockPage() {
           >
             <h2 className="text-xl font-bold mb-4">Edit Medicine</h2>
 
+            {/* --- CORRECTED CHILD SELECTOR --- */}
+            <label className="block mb-2 font-medium">Assign to Child User</label>
+            <select
+              // Use the currently assigned child_id as the controlled value
+              value={selectedMed.child_id}
+              // Use a dedicated handler for updating the selectedMed state
+              onChange={(e) => {
+                // Ensure the new value is stored as the child_id
+                setSelectedMed({ ...selectedMed, child_id: e.target.value });
+              }}
+              className="border rounded px-3 py-2 w-full mb-4"
+            >
+              {/* Optional: Add a disabled default option if no child is selected */}
+              <option value="" disabled>Select a child</option>
+              
+              {/* Map through all users to create options */}
+              {users.map((u) => (
+                <option key={u.id} value={u.id}>
+                  {u.username}
+                </option>
+              ))}
+            </select>
+            {/* ------------------------------------- */}
+
             {/* Name */}
             <label className="block mb-2 font-medium">Name</label>
             <input
@@ -344,7 +408,7 @@ export default function MedicineStockPage() {
               {intakeTimesOptions.map((time) => (
                 <label
                   key={time}
-                  className={`cursor-pointer px-3 py-1 rounded border ${selectedMed.daily_intake_times.includes(time)
+                  className={`cursor-pointer px-3 py-1 rounded border ${selectedMed.daily_intake_times?.includes(time) // Added safe chaining ?.
                     ? "bg-green-600 text-white border-green-600"
                     : "border-gray-300 text-gray-700"
                     }`}
@@ -352,11 +416,12 @@ export default function MedicineStockPage() {
                   <input
                     type="checkbox"
                     value={time}
-                    checked={selectedMed.daily_intake_times.includes(time)}
+                    checked={selectedMed.daily_intake_times?.includes(time)} // Added safe chaining ?.
                     onChange={() => {
-                      const updatedTimes = selectedMed.daily_intake_times.includes(time)
-                        ? selectedMed.daily_intake_times.filter((t) => t !== time)
-                        : [...selectedMed.daily_intake_times, time];
+                      const currentTimes = selectedMed.daily_intake_times || []; // Initialize if null
+                      const updatedTimes = currentTimes.includes(time)
+                        ? currentTimes.filter((t) => t !== time)
+                        : [...currentTimes, time];
                       setSelectedMed({ ...selectedMed, daily_intake_times: updatedTimes });
                     }}
                     className="hidden"
@@ -425,4 +490,3 @@ export default function MedicineStockPage() {
     </main>
   );
 }
-
