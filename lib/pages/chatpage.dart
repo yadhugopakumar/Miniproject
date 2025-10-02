@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_markdown/flutter_markdown.dart';
 import 'package:loading_animation_widget/loading_animation_widget.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:medremind/pages/screens/chat_med_add.dart';
@@ -93,8 +94,7 @@ class _ChatpageState extends State<Chatpage> with TickerProviderStateMixin {
     WidgetsBinding.instance.addPostFrameCallback((_) {
       Future.delayed(const Duration(milliseconds: 100), () {
         if (_scrollController.hasClients && mounted) {
-          final double maxExtent =
-              _scrollController.position.maxScrollExtent ;
+          final double maxExtent = _scrollController.position.maxScrollExtent;
           _scrollController.jumpTo(maxExtent);
           print("Scrolled to: $maxExtent"); // Debug print
         }
@@ -431,6 +431,57 @@ class _ChatpageState extends State<Chatpage> with TickerProviderStateMixin {
     }
   }
 
+//   Future<void> _requestMedicineDetailsFromGemini(
+//       List<ExtractedMedicine> medicines) async {
+//     if (medicines.isEmpty) return;
+
+//     // Prepare medicine names list
+//     final medNames = medicines.map((m) => m.name).join(", ");
+
+//     final prompt = """
+// You are a medical assistant. Provide details for these medicines:
+
+// Medicines: $medNames
+
+// For each medicine, include:
+// - Name
+// - Usage / purpose
+// - Possible side effects
+// - Recommendations
+// Keep it short, clear, and easy to understand.
+// """;
+
+//     // Add a temporary thinking message
+//     final tempMessage = ChatMessage(
+//       role: 'bot',
+//       content: 'Fetching medicine details...',
+//       timestamp: DateTime.now(),
+//       isAnimating: true,
+//     );
+//     await ChatStorageService.addMessage(tempMessage);
+//     _scrollToBottom(force: true);
+
+//     try {
+//       // Send prompt to Gemini API
+//       final response = await provider.sendMessage(prompt);
+
+//       // Replace tempMessage with actual response
+//       await ChatStorageService.updateMessageContent(
+//         tempMessage
+//             .key, // Assuming your ChatStorageService allows updating by key
+//         response,
+//       );
+
+//       _scrollToBottom(force: true);
+//     } catch (e) {
+//       await ChatStorageService.updateMessageContent(
+//         tempMessage.key,
+//         "⚠️ Error fetching medicine details: $e",
+//       );
+//       _scrollToBottom(force: true);
+//     }
+//   }
+
   void _showImagePickerOptions() {
     showModalBottomSheet(
       context: context,
@@ -696,13 +747,14 @@ class _ChatpageState extends State<Chatpage> with TickerProviderStateMixin {
                               fontWeight: FontWeight.w500,
                             ),
                           )
-                        : Text(
-                            msg.content,
-                            style: const TextStyle(
-                              fontSize: 15,
-                              fontWeight: FontWeight.w500,
-                            ),
-                          ),
+                        : MarkdownBody(
+        data: msg.content,
+        styleSheet: MarkdownStyleSheet(
+          p: const TextStyle(fontSize: 15, fontWeight: FontWeight.w500),
+          strong: const TextStyle(fontWeight: FontWeight.bold),
+          listBullet: const TextStyle(fontSize: 15),
+        ),
+      ),
                   ),
                 ),
                 // Medicine buttons (if extracted medicines exist)
@@ -834,13 +886,89 @@ class _ChatpageState extends State<Chatpage> with TickerProviderStateMixin {
                               ],
                             ),
                           ),
+                          ElevatedButton(
+                            onPressed: () async {
+                              // 1️⃣ Add user message
+                              final detailMsg = ChatMessage(
+                                role: 'user',
+                                content: "Details about - 💊 ${medicine.name}",
+                                timestamp: DateTime.now(),
+                              );
+                              ChatStorageService.addMessage(detailMsg);
+
+                              // 2️⃣ Add "thinking" placeholder message
+                              final thinkingMsg = ChatMessage(
+                                role: 'bot',
+                                content: "💭 Thinking...",
+                                timestamp: DateTime.now(),
+                              );
+                              ChatStorageService.addMessage(thinkingMsg);
+
+                              setState(
+                                  () {}); // Refresh chat to show "thinking"
+
+                              // 3️⃣ Fetch response from Gemini
+                              String response = await ChatService()
+                                  .fetchDetailedMedicineInfo(medicine.name);
+
+                              // 4️⃣ Replace the "thinking" message with actual response
+                              thinkingMsg.content = response;
+                              thinkingMsg.timestamp = DateTime.now();
+                              await thinkingMsg.save(); // if using Hive
+
+                              setState(
+                                  () {}); // Refresh chat to show actual answer
+                            },
+                            child: Text("Show Details"),
+                          ),
                         ],
                       ),
                     ),
                   )))
               .toList(),
+          const SizedBox(height: 10),
         ],
       ),
+    );
+  }
+
+  void _showMedicineDetails(List<ExtractedMedicine> medicines) {
+    showDialog(
+      context: context,
+      builder: (context) {
+        return AlertDialog(
+          title: const Text("Medicine Details"),
+          content: SizedBox(
+            width: double.maxFinite,
+            child: ListView.builder(
+              shrinkWrap: true,
+              itemCount: medicines.length,
+              itemBuilder: (context, index) {
+                final med = medicines[index];
+                return ListTile(
+                  title: Text(med.name,
+                      style: const TextStyle(fontWeight: FontWeight.bold)),
+                  subtitle: Text(
+                    [
+                      if (med.dosage.isNotEmpty) "Dosage: ${med.dosage}",
+                      if (med.instructions.isNotEmpty)
+                        "Instructions: ${med.instructions}",
+                      if (med.dailyIntakeTimes.isNotEmpty)
+                        "Times: ${med.dailyIntakeTimes.join(", ")}",
+                    ].join("\n"),
+                  ),
+                );
+              },
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: const Text("Close"),
+            ),
+          ],
+        );
+      },
     );
   }
 
