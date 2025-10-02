@@ -7,8 +7,8 @@ import 'gemini_provider.dart';
 
 class ChatService {
   late final GeminiProvider _aiProvider;
-    String apiKey = "AIzaSyDT1NimstllZmAz-mX56tFC03V4lOZp0OY";
-   
+  String apiKey = "AIzaSyDT1NimstllZmAz-mX56tFC03V4lOZp0OY";
+
   // Hive boxes
   late Box<Medicine> _medicineBox;
   late Box<HistoryEntry> _historyBox;
@@ -44,6 +44,7 @@ class ChatService {
           query.contains('good morning')) {
         return "Hello! 👋 I'm your personal health assistant. I can help you manage your medicines, track your health reports, and provide general health information. How can I assist you today?";
       }
+      if (query.contains("Details about "))
       // Medicine Management Queries
       if (_isMedicineQuery(query)) {
         return await _handleMedicineQuery(query, currentChildId);
@@ -248,6 +249,67 @@ class ChatService {
       return "Hello ${user.username}! How can I support you with your health today?";
     } catch (e) {
       return "Hello! I'm here to help you with your medicines and health information.";
+    }
+  }
+
+  /// Returns detailed information about a specific medicine
+  Future<String> getMedicineDetailsResponse(String medicineName) async {
+    try {
+      final medicineBox = Hive.box<Medicine>('medicinesBox');
+
+      final medicine = medicineBox.values.firstWhere(
+        (med) => med.name.toLowerCase() == medicineName.toLowerCase(),
+        orElse: () => throw Exception('Medicine not found'),
+      );
+
+      return "Medicine: ${medicine.name}\n"
+          "Dosage: ${medicine.dosage}\n"
+          "Quantity Left: ${medicine.quantityLeft}\n"
+          "Expiry Date: ${_formatDate(medicine.expiryDate)}\n"
+          "Daily Intake Times: ${medicine.dailyIntakeTimes.join(', ')}";
+    } catch (e) {
+      print('Error fetching medicine details: $e');
+      return "Sorry, I could not find details for $medicineName.";
+    }
+  }
+
+  Future<String> fetchDetailedMedicineInfo(String medicineName) async {
+    try {
+      // Build a detailed, safe AI prompt
+      String prompt = '''
+You are a careful medical AI assistant. Provide safe, general information about the medicine "$medicineName".
+
+Format your response neatly using sections and bullet points:
+
+Medicine Name: $medicineName
+
+1. Purpose / Main Use:
+- What this medicine is commonly used for
+
+2. Typical Usage:
+- How it is generally used (general info)
+
+3. Common Use Cases:
+- Typical scenarios for this medicine
+
+4. Common Side Effects / Problems:
+- List common side effects
+
+5. High Usage / Long-term Concerns:
+- Warnings for high or prolonged usage
+
+Keep it concise,no detailed data needed.basic info clear, and safe.
+Do NOT give personal medical advice or exact dosages.
+Always recommend consulting a healthcare provider.
+''';
+
+      // Fetch AI response directly from Gemini
+      String aiResponse = await _aiProvider.generateContent(prompt);
+
+      return aiResponse;
+    } catch (e) {
+      print('Error fetching detailed medicine info: $e');
+      return "I couldn't fetch detailed information for $medicineName at the moment. Please consult your healthcare provider or pharmacist for accurate information.\n\n⚠️ Always consult your doctor before taking any medicine.";
     }
   }
 
