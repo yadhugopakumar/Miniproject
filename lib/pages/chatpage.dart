@@ -748,13 +748,15 @@ class _ChatpageState extends State<Chatpage> with TickerProviderStateMixin {
                             ),
                           )
                         : MarkdownBody(
-        data: msg.content,
-        styleSheet: MarkdownStyleSheet(
-          p: const TextStyle(fontSize: 15, fontWeight: FontWeight.w500),
-          strong: const TextStyle(fontWeight: FontWeight.bold),
-          listBullet: const TextStyle(fontSize: 15),
-        ),
-      ),
+                            data: msg.content,
+                            styleSheet: MarkdownStyleSheet(
+                              p: const TextStyle(
+                                  fontSize: 15, fontWeight: FontWeight.w500),
+                              strong:
+                                  const TextStyle(fontWeight: FontWeight.bold),
+                              listBullet: const TextStyle(fontSize: 15),
+                            ),
+                          ),
                   ),
                 ),
                 // Medicine buttons (if extracted medicines exist)
@@ -810,127 +812,264 @@ class _ChatpageState extends State<Chatpage> with TickerProviderStateMixin {
   }
 
 // Build medicine buttons widget
-  Widget _buildMedicineButtons() {
-    final medicines = ExtractedMedicineStorage.getExtractedMedicines();
+  // Widget _buildMedicineButtons() {
+  //   final medicines = ExtractedMedicineStorage.getExtractedMedicines();
 
-    if (medicines.isEmpty) return const SizedBox.shrink();
+  //   if (medicines.isEmpty) return const SizedBox.shrink();
 
-    return Container(
-      margin: const EdgeInsets.only(top: 2),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-            decoration: BoxDecoration(
-              color: Colors.green[50],
-              borderRadius: BorderRadius.circular(8),
-              border: Border.all(color: Colors.green[200]!),
-            ),
-            child: const Row(
-              children: [
-                Icon(Icons.medical_services, color: Colors.green, size: 16),
-                SizedBox(width: 8),
-                Text(
-                  "Medicines found - Click to add:",
-                  style: TextStyle(
-                    fontSize: 13,
-                    fontWeight: FontWeight.w600,
-                    color: Colors.green,
-                  ),
-                ),
-              ],
-            ),
+  //   return Container(
+  //     margin: const EdgeInsets.only(top: 2),
+  //     child: Column(
+  //       crossAxisAlignment: CrossAxisAlignment.start,
+  //       children: [
+  //         Container(
+  //           padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+  //           decoration: BoxDecoration(
+  //             color: Colors.green[50],
+  //             borderRadius: BorderRadius.circular(8),
+  //             border: Border.all(color: Colors.green[200]!),
+  //           ),
+  //           child: const Row(
+  //             children: [
+  //               Icon(Icons.medical_services, color: Colors.green, size: 16),
+  //               SizedBox(width: 8),
+  //               Text(
+  //                 "Medicines found - Click to add:",
+  //                 style: TextStyle(
+  //                   fontSize: 13,
+  //                   fontWeight: FontWeight.w600,
+  //                   color: Colors.green,
+  //                 ),
+  //               ),
+  //             ],
+  //           ),
+  //         ),
+  //         const SizedBox(height: 8),
+  //         ...medicines
+  //             .map((medicine) => Container(
+  //                 width: double.infinity,
+  //                 margin: const EdgeInsets.only(bottom: 2),
+  //                 child: InkWell(
+  //                   onTap: () => _navigateToAddMedicine(medicine),
+  //                   child: Container(
+  //                     padding: const EdgeInsets.symmetric(
+  //                         horizontal: 10, vertical: 4),
+  //                     decoration: BoxDecoration(
+  //                       color: Color.fromARGB(255, 255, 254, 179),
+  //                       borderRadius: BorderRadius.circular(8),
+  //                       border: Border.all(color: Colors.green[300]!),
+  //                     ),
+  //                     child: Row(
+  //                       crossAxisAlignment:
+  //                           CrossAxisAlignment.center, // center vertically
+  //                       children: [
+  //                         Icon(Icons.add_circle_outline,
+  //                             size: 18, color: Colors.green[800]),
+  //                         const SizedBox(width: 8),
+  //                         Expanded(
+  //                           child: Column(
+  //                             crossAxisAlignment: CrossAxisAlignment.start,
+  //                             mainAxisSize: MainAxisSize.min,
+  //                             children: [
+  //                               Text(
+  //                                 medicine.name,
+  //                                 style: const TextStyle(
+  //                                   fontSize: 14,
+  //                                   fontWeight: FontWeight.w600,
+  //                                 ),
+  //                               ),
+
+  //                               if (medicine.dosage.isNotEmpty ||
+  //                                   medicine.instructions.isNotEmpty ||
+  //                                   medicine.dailyIntakeTimes.isNotEmpty)
+  //                                 Text(
+  //                                   [
+  //                                     if (medicine.dosage.isNotEmpty)
+  //                                       medicine.dosage,
+  //                                     if (medicine.instructions.isNotEmpty)
+  //                                       medicine.instructions,
+  //                                     if (medicine.dailyIntakeTimes.isNotEmpty)
+  //                                       medicine.dailyIntakeTimes.join(", ")
+  //                                   ].join(" • "),
+  //                                   style: const TextStyle(
+  //                                     fontSize: 12,
+  //                                     color: Colors.black87,
+  //                                   ),
+  //                                 ),
+  //                             ],
+  //                           ),
+  //                         ),
+  //                         ElevatedButton(
+  //                           onPressed: () async {
+  //                             // 1️⃣ Add user message
+  //                             final detailMsg = ChatMessage(
+  //                               role: 'user',
+  //                               content: "Details about - 💊 ${medicine.name}",
+  //                               timestamp: DateTime.now(),
+  //                             );
+  //                             ChatStorageService.addMessage(detailMsg);
+
+  //                             // 2️⃣ Add "thinking" placeholder message
+  //                             final thinkingMsg = ChatMessage(
+  //                               role: 'bot',
+  //                               content: "💭 Thinking...",
+  //                               timestamp: DateTime.now(),
+  //                             );
+  //                             ChatStorageService.addMessage(thinkingMsg);
+
+  //                             setState(
+  //                                 () {}); // Refresh chat to show "thinking"
+
+  //                             // 3️⃣ Fetch response from Gemini
+  //                             String response = await ChatService()
+  //                                 .fetchDetailedMedicineInfo(medicine.name);
+
+  //                             // 4️⃣ Replace the "thinking" message with actual response
+  //                             thinkingMsg.content = response;
+  //                             thinkingMsg.timestamp = DateTime.now();
+  //                             await thinkingMsg.save(); // if using Hive
+
+  //                             setState(
+  //                                 () {}); // Refresh chat to show actual answer
+  //                           },
+  //                           child: Text("Show Details"),
+  //                         ),
+  //                       ],
+  //                     ),
+  //                   ),
+  //                 )))
+  //             .toList(),
+  //         const SizedBox(height: 10),
+  //       ],
+  //     ),
+  //   );
+  // }
+// Build medicine buttons widget
+Widget _buildMedicineButtons() {
+  final medicines = ExtractedMedicineStorage.getExtractedMedicines();
+
+  if (medicines.isEmpty) return const SizedBox.shrink();
+
+  return Container(
+    margin: const EdgeInsets.only(top: 2),
+    child: Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Container(
+          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+          decoration: BoxDecoration(
+            color: Colors.green[50],
+            borderRadius: BorderRadius.circular(8),
+            border: Border.all(color: Colors.green[200]!),
           ),
-          const SizedBox(height: 8),
-          ...medicines
-              .map((medicine) => Container(
-                  width: double.infinity,
-                  margin: const EdgeInsets.only(bottom: 2),
-                  child: InkWell(
-                    onTap: () => _navigateToAddMedicine(medicine),
-                    child: Container(
-                      padding: const EdgeInsets.symmetric(
-                          horizontal: 10, vertical: 4),
-                      decoration: BoxDecoration(
-                        color: Color.fromARGB(255, 255, 254, 179),
-                        borderRadius: BorderRadius.circular(8),
-                        border: Border.all(color: Colors.green[300]!),
-                      ),
-                      child: Row(
-                        crossAxisAlignment:
-                            CrossAxisAlignment.center, // center vertically
-                        children: [
-                          Icon(Icons.add_circle_outline,
-                              size: 18, color: Colors.green[800]),
-                          const SizedBox(width: 8),
-                          Expanded(
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              mainAxisSize: MainAxisSize.min,
-                              children: [
-                                Text(
-                                  medicine.name,
-                                  style: const TextStyle(
-                                    fontSize: 14,
-                                    fontWeight: FontWeight.w600,
-                                  ),
-                                ),
-                                if (medicine.dosage.isNotEmpty ||
-                                    medicine.instructions.isNotEmpty ||
-                                    medicine.dailyIntakeTimes.isNotEmpty)
-                                  Text(
-                                    "${medicine.dosage} • ${medicine.instructions} • at ${medicine.dailyIntakeTimes.join(", ")}",
-                                    style: const TextStyle(fontSize: 12),
-                                  ),
-                              ],
-                            ),
-                          ),
-                          ElevatedButton(
-                            onPressed: () async {
-                              // 1️⃣ Add user message
-                              final detailMsg = ChatMessage(
-                                role: 'user',
-                                content: "Details about - 💊 ${medicine.name}",
-                                timestamp: DateTime.now(),
-                              );
-                              ChatStorageService.addMessage(detailMsg);
-
-                              // 2️⃣ Add "thinking" placeholder message
-                              final thinkingMsg = ChatMessage(
-                                role: 'bot',
-                                content: "💭 Thinking...",
-                                timestamp: DateTime.now(),
-                              );
-                              ChatStorageService.addMessage(thinkingMsg);
-
-                              setState(
-                                  () {}); // Refresh chat to show "thinking"
-
-                              // 3️⃣ Fetch response from Gemini
-                              String response = await ChatService()
-                                  .fetchDetailedMedicineInfo(medicine.name);
-
-                              // 4️⃣ Replace the "thinking" message with actual response
-                              thinkingMsg.content = response;
-                              thinkingMsg.timestamp = DateTime.now();
-                              await thinkingMsg.save(); // if using Hive
-
-                              setState(
-                                  () {}); // Refresh chat to show actual answer
-                            },
-                            child: Text("Show Details"),
-                          ),
-                        ],
-                      ),
+          child: const Row(
+            children: [
+              Icon(Icons.medical_services, color: Colors.green, size: 16),
+              SizedBox(width: 8),
+              Text(
+                "Medicines found - Click to add:",
+                style: TextStyle(
+                  fontSize: 13,
+                  fontWeight: FontWeight.w600,
+                  color: Colors.green,
+                ),
+              ),
+            ],
+          ),
+        ),
+        const SizedBox(height: 8),
+        ...medicines
+            .map((medicine) => Container(
+                width: double.infinity,
+                margin: const EdgeInsets.only(bottom: 2),
+                child: InkWell(
+                  onTap: () => _navigateToAddMedicine(medicine),
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(
+                        horizontal: 10, vertical: 4),
+                    decoration: BoxDecoration(
+                      color: Color.fromARGB(255, 255, 254, 179),
+                      borderRadius: BorderRadius.circular(8),
+                      border: Border.all(color: Colors.green[300]!),
                     ),
-                  )))
-              .toList(),
-          const SizedBox(height: 10),
-        ],
-      ),
-    );
-  }
+                    child: Row(
+                      crossAxisAlignment: CrossAxisAlignment.center,
+                      children: [
+                        Icon(Icons.add_circle_outline,
+                            size: 18, color: Colors.green[800]),
+                        const SizedBox(width: 8),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Text(
+                                medicine.name,
+                                style: const TextStyle(
+                                  fontSize: 14,
+                                  fontWeight: FontWeight.w600,
+                                ),
+                              ),
+                              if (medicine.dosage.isNotEmpty ||
+                                  medicine.instructions.isNotEmpty ||
+                                  medicine.dailyIntakeTimes.isNotEmpty)
+                                Text(
+                                  [
+                                    if (medicine.dosage.isNotEmpty)
+                                      medicine.dosage,
+                                    if (medicine.instructions.isNotEmpty)
+                                      medicine.instructions,
+                                    if (medicine.dailyIntakeTimes.isNotEmpty)
+                                      medicine.dailyIntakeTimes.join(", ")
+                                  ].join(" • "),
+                                  style: const TextStyle(fontSize: 12),
+                                ),
+                            ],
+                          ),
+                        ),
+                        ElevatedButton(
+                          onPressed: () async {
+                            // 1️⃣ Add user message
+                            final detailMsg = ChatMessage(
+                              role: 'user',
+                              content: "Details about - 💊 ${medicine.name}",
+                              timestamp: DateTime.now(),
+                            );
+                            ChatStorageService.addMessage(detailMsg);
+
+                            // 2️⃣ Add "thinking" placeholder message
+                            final thinkingMsg = ChatMessage(
+                              role: 'bot',
+                              content: "💭 Thinking...",
+                              timestamp: DateTime.now(),
+                            );
+                            ChatStorageService.addMessage(thinkingMsg);
+
+                            setState(() {}); // Refresh chat to show "thinking"
+
+                            // 3️⃣ Fetch response from Gemini
+                            String response = await ChatService()
+                                .fetchDetailedMedicineInfo(medicine.name);
+
+                            // 4️⃣ Replace the "thinking" message with actual response
+                            thinkingMsg.content = response;
+                            thinkingMsg.timestamp = DateTime.now();
+                            await thinkingMsg.save(); // if using Hive
+
+                            setState(() {}); // Refresh chat to show actual answer
+                          },
+                          child: const Text("Show Details"),
+                        ),
+                      ],
+                    ),
+                  ),
+                )))
+            .toList(),
+        const SizedBox(height: 10),
+      ],
+    ),
+  );
+}
 
   void _showMedicineDetails(List<ExtractedMedicine> medicines) {
     showDialog(

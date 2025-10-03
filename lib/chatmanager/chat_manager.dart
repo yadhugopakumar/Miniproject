@@ -10,6 +10,7 @@ import '../Hivemodel/health_report.dart';
 import '../Hivemodel/history_entry.dart';
 import '../Hivemodel/medicine.dart';
 import '../Hivemodel/user_settings.dart';
+import 'ai_chat/chat_service.dart';
 
 enum VoiceMode { normal, addMedicine }
 
@@ -565,7 +566,31 @@ class VoiceChatManager {
     } catch (e) {
       return "Paracetamol is commonly used to reduce fever and relieve pain. Please check with your doctor for proper dosage.";
     }
+
+
   }
+//   Future<String> _getMedicineInfo(String text) async {
+//   try {
+//     // Extract medicine name from the text (assume whole text is the medicine name)
+//     String medicineName = text.trim();
+//     if (medicineName.isEmpty) throw StateError('No medicine name provided');
+
+//     // Fetch AI response via your existing method that handles Gemini API and credentials
+//    // Create an instance of ChatService
+//     final chatService = ChatService();
+
+//     // Call the instance method
+//     String aiResponse = await chatService.getAiMedicineInfo(medicineName);
+
+//     return aiResponse;
+//   } catch (e) {
+//     print('Error fetching medicine info: $e');
+//     return "I couldn't fetch detailed information for the medicine mentioned. "
+//            "Please consult your healthcare provider or pharmacist for accurate info.\n\n"
+//            "⚠️ Always consult a doctor before taking any medicine.";
+//   }
+// }
+
 
 // Utility methods
   bool _isSameDay(DateTime date1, DateTime date2) {
@@ -648,8 +673,9 @@ class VoiceChatManager {
       }
 
       // Medicine information
-      else if (text.contains("paracetamol") || text.contains("medicine info")) {
-        return _getMedicineInfo(text, medicineBox);
+      else if (text.contains("paracetamol") || text.contains("medicine info")||
+          text.contains("medicine information")) {
+        return _getMedicineInfo(text,medicineBox);
       }
 
       // How app works

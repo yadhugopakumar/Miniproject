@@ -148,16 +148,7 @@ class _HomepageStateContent extends State<Homepage> {
               final meds = box.values.toList();
               final todayMeds = <_TodaySchedule>[];
               final historyBox = Hive.box<HistoryEntry>('historyBox');
-              // for (var med in meds) {
-              //   for (final time in med.dailyIntakeTimes) {
-              //     todayMeds.add(_TodaySchedule(
-              //       medicine: med,
-              //       time: time,
-              //       dosage: med.dosage,
-              //       taken: _isTaken(med.name, time, today, historyBox),
-              //     ));
-              //   }
-              // }
+         
               for (var med in meds) {
                 for (final time in med.dailyIntakeTimes) {
                   final parts = time.split(':');

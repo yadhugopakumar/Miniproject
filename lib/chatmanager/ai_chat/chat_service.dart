@@ -34,7 +34,8 @@ class ChatService {
     try {
       String currentChildId = _sessionBox.get('childId', defaultValue: '');
       String query = userInput.toLowerCase().trim();
-      // ADD THIS GREETING CHECK FIRST (before all other checks)
+
+      // GREETING CHECK
       if (query == 'hi' ||
           query == 'hello' ||
           query == 'hey' ||
@@ -44,7 +45,7 @@ class ChatService {
           query.contains('good morning')) {
         return "Hello! 👋 I'm your personal health assistant. I can help you manage your medicines, track your health reports, and provide general health information. How can I assist you today?";
       }
-      if (query.contains("Details about "))
+
       // Medicine Management Queries
       if (_isMedicineQuery(query)) {
         return await _handleMedicineQuery(query, currentChildId);
@@ -60,9 +61,28 @@ class ChatService {
         return _handleUserInfoQuery(query, currentChildId);
       }
 
-      // Symptom-Based Queries (Safe, Personalized)
+      // Symptom-Based Queries
       if (_isSymptomQuery(query)) {
         return await _handleSymptomQuery(userInput, currentChildId);
+      }
+
+      // Medicine Info Queries like "paracetamol info"
+      if (query.contains("info") || query.contains("information")) {
+        try {
+          // Extract medicine name by removing keywords
+          String medicineName =
+              query.replaceAll("info", "").replaceAll("information", "").trim();
+
+          final chatService = ChatService();
+          // Call instance method
+          String aiResponse = await chatService.getAiMedicineInfo(medicineName);
+          return aiResponse;
+        } catch (e) {
+          print('Error fetching medicine info: $e');
+          return "I couldn't fetch detailed information for the medicine mentioned. "
+              "Please consult your healthcare provider or pharmacist for accurate info.\n\n"
+              "⚠️ Always consult a doctor before taking any medicine.";
+        }
       }
 
       // Default fallback
@@ -279,27 +299,20 @@ class ChatService {
       String prompt = '''
 You are a careful medical AI assistant. Provide safe, general information about the medicine "$medicineName".
 
-Format your response neatly using sections and bullet points:
+Format your response neatly using sections and bullet points. For each section, provide **up to 3 main points only**.
 
 Medicine Name: $medicineName
 
 1. Purpose / Main Use:
-- What this medicine is commonly used for
+- List up to 3 main purposes
+2. Common Use Cases:
+- List up to 3 typical scenarios
+3. Common Side Effects / Problems:
+- List up to 3 common side effects
 
-2. Typical Usage:
-- How it is generally used (general info)
-
-3. Common Use Cases:
-- Typical scenarios for this medicine
-
-4. Common Side Effects / Problems:
-- List common side effects
-
-5. High Usage / Long-term Concerns:
-- Warnings for high or prolonged usage
-
-Keep it concise,no detailed data needed.basic info clear, and safe.
-Do NOT give personal medical advice or exact dosages.
+Keep it concise, clear, and safe.
+Do NOT give personal medical advice.
+Do not include extra information beyond what is requested.
 Always recommend consulting a healthcare provider.
 ''';
 
@@ -310,6 +323,44 @@ Always recommend consulting a healthcare provider.
     } catch (e) {
       print('Error fetching detailed medicine info: $e');
       return "I couldn't fetch detailed information for $medicineName at the moment. Please consult your healthcare provider or pharmacist for accurate information.\n\n⚠️ Always consult your doctor before taking any medicine.";
+    }
+  }
+
+  Future<String> getAiMedicineInfo(String medicineName) async {
+    try {
+      medicineName = medicineName.trim();
+      if (medicineName.isEmpty) throw StateError('No medicine name provided');
+
+      // Build AI prompt
+      String prompt = '''
+You are a careful medical AI assistant. Provide safe, general information about the medicine "$medicineName".
+
+Format your response neatly using sections and bullet points. For each section, provide **up to 3 main points only**.
+
+Medicine Name: $medicineName
+
+1. Purpose / Main Use:
+- List up to 3 main purposes
+2. Common Use Cases:
+- List up to 3 typical scenarios
+3. Common Side Effects / Problems:
+- List up to 3 common side effects
+
+Keep it concise, clear, and safe.
+Do NOT give personal medical advice.
+Do not include extra information beyond what is requested.
+Always recommend consulting a healthcare provider.
+''';
+
+      // Fetch AI response via your existing provider method (Gemini + creds)
+      String aiResponse = await _aiProvider.generateContent(prompt);
+
+      return aiResponse;
+    } catch (e) {
+      print('Error fetching medicine info: $e');
+      return "I couldn't fetch detailed information for the medicine mentioned. "
+          "Please consult your healthcare provider or pharmacist for accurate info.\n\n"
+          "⚠️ Always consult a doctor before taking any medicine.";
     }
   }
 
