@@ -18,50 +18,46 @@ class RefillTrackerPage extends StatefulWidget {
 class _RefillTrackerPageState extends State<RefillTrackerPage> {
   final _supabase = Supabase.instance.client;
 
-  Future<void> _refreshData() async {
-    try {
-      final userBox = Hive.box<UserSettings>('settingsBox'); // ✅ FIXED
-      final userSettings = userBox.get('user') as UserSettings?;
-      if (userSettings == null) {
-        AppSnackbar.show(context,
-            message: "No user settings found", success: true);
-        return;
-      }
-      final childId = userSettings.childId;
-      // Fetch from Supabase
-      final response = await _supabase
-          .from('medicine')
-          .select()
-          .eq('child_id', childId) // filter only this child's medicines
-          .order('id', ascending: true);
 
-      if (response.isNotEmpty) {
-        final box = Hive.box<Medicine>('medicinesBox');
-
-        // Clear old data before inserting fresh data
-        await box.clear(); // clear old data
-
-        for (final item in response) {
-          final medicine = Medicine(
-            id: item['id'], // Use Supabase ID
-            name: item['name'],
-            dosage: item['dosage'],
-            totalQuantity: item['total_quantity'],
-            quantityLeft: item['quantity_left'],
-            expiryDate: DateTime.parse(item['expiry_date']),
-            refillThreshold: item['refill_threshold'],
-            dailyIntakeTimes:
-                List<String>.from(item['daily_intake_times'] ?? []),
-          );
-          await box.put(medicine.id, medicine);
-        }
-      }
-    } catch (e) {
-      print(e);
+Future<void> _refreshData() async {
+  try {
+    final userBox = Hive.box<UserSettings>('settingsBox');
+    final userSettings = userBox.get('user') as UserSettings?;
+    if (userSettings == null) {
       AppSnackbar.show(context,
-          message: "Failed to fetch updates from server", success: false);
+          message: "No user settings found", success: false);
+      return;
     }
+    final childId = userSettings.childId;
+    final box = Hive.box<Medicine>('medicinesBox');
+
+    // Push all Hive medicines to Supabase
+    for (final med in box.values) {
+      try {
+        await _supabase.from('medicine').upsert({
+          'id': med.id,
+          'child_id': childId,
+          'name': med.name,
+          'dosage': med.dosage,
+          'total_quantity': med.totalQuantity,
+          'quantity_left': med.quantityLeft,
+          'expiry_date': med.expiryDate.toIso8601String(),
+          'refill_threshold': med.refillThreshold,
+          'daily_intake_times': med.dailyIntakeTimes,
+        });
+      } catch (e) {
+        print("Supabase update failed for ${med.name}: $e");
+      }
+    }
+
+    AppSnackbar.show(context,
+        message: "Local changes synced to server", success: true);
+  } catch (e) {
+    print(e);
+    AppSnackbar.show(context,
+        message: "Failed to sync with server", success: false);
   }
+}
 
   @override
   Widget build(BuildContext context) {

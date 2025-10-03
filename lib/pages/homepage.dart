@@ -73,7 +73,8 @@ class _HomepageStateContent extends State<Homepage> {
               e.medicineName == medicineName &&
               e.date.year == date.year &&
               e.date.month == date.month &&
-              e.date.day == date.day,
+              e.date.day == date.day&&
+              e.time == time,
           orElse: () => null,
         );
     if (entry == null) return 'pending';
@@ -384,7 +385,7 @@ class _HomepageStateContent extends State<Homepage> {
 
                         await historyBox.put(doseKey, entry);
 
-                        if (newStatus == 'taken') {
+                        if (newStatus == 'taken'|| newStatus == 'takenLate') {
                           final dose = int.tryParse(sched.medicine.dosage) ?? 1;
                           sched.medicine.quantityLeft =
                               (sched.medicine.quantityLeft - dose)
