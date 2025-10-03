@@ -147,7 +147,7 @@ END""";
 
   // ✅ Core API call method
   Future<String> _makeApiCall(List<Map<String, dynamic>> contents,
-      {int maxTokens = 200}) async {
+      {int maxTokens = 230}) async {
     final url = Uri.parse(
         'https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash-lite:generateContent?key=$apiKey');
 
