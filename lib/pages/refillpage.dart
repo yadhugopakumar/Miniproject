@@ -16,6 +16,11 @@ class RefillTrackerPage extends StatefulWidget {
 }
 
 class _RefillTrackerPageState extends State<RefillTrackerPage> {
+
+void initState(){
+  _refreshData();
+}
+
   final _supabase = Supabase.instance.client;
 
 
@@ -50,8 +55,8 @@ Future<void> _refreshData() async {
       }
     }
 
-    AppSnackbar.show(context,
-        message: "Local changes synced to server", success: true);
+    // AppSnackbar.show(context,
+    //     message: "Local changes synced to server", success: true);
   } catch (e) {
     print(e);
     AppSnackbar.show(context,
