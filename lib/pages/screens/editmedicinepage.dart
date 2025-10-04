@@ -135,214 +135,151 @@ class _EditMedicinePageState extends State<EditMedicinePage> {
       });
     }
   }
+
 //-------------------------------------------------
-  void _saveChanges() async {
-    setState(() => _isediting = true);
 
-    bool allTimesSelected = _timesPerDay != null &&
-        List.generate(_timesPerDay!, (i) => _doseTimes[i])
-            .every((t) => t != null);
+void _saveChanges() async {
+  setState(() => _isediting = true);
 
-    if (_nameController.text.trim().isEmpty ||
-        _dosageController.text.trim().isEmpty ||
-        _stockController.text.trim().isEmpty ||
-        _thresholdController.text.trim().isEmpty ||
-        _selectedDate == null ||
-        _timesPerDay == null ||
-        !allTimesSelected) {
-      AppSnackbar.show(context,
-          message: "Please fill all fields", success: false);
-      setState(() => _isediting = false);
-      return;
+  bool allTimesSelected = _timesPerDay != null &&
+      List.generate(_timesPerDay!, (i) => _doseTimes[i]).every((t) => t != null);
+
+  if (_nameController.text.trim().isEmpty ||
+      _dosageController.text.trim().isEmpty ||
+      _stockController.text.trim().isEmpty ||
+      _thresholdController.text.trim().isEmpty ||
+      _selectedDate == null ||
+      _timesPerDay == null ||
+      !allTimesSelected) {
+    AppSnackbar.show(context, message: "Please fill all fields", success: false);
+    setState(() => _isediting = false);
+    return;
+  }
+
+  try {
+    final doseTimes = _doseTimes
+        .take(_timesPerDay!)
+        .map((t) =>
+            "${t!.hour.toString().padLeft(2, '0')}:${t.minute.toString().padLeft(2, '0')}")
+        .toList();
+
+    // 1️⃣ Update Hive Medicine object
+    final med = widget.medicine;
+    med.name = _nameController.text.trim();
+    med.dosage = _dosageController.text.trim();
+    med.expiryDate = _selectedDate!;
+    med.dailyIntakeTimes = doseTimes;
+    med.totalQuantity = int.parse(_stockController.text.trim());
+    // ❌ Do NOT reset quantityLeft here
+    med.refillThreshold = int.parse(_thresholdController.text.trim());
+    med.instructions = _instructionsController.text.trim();
+    await med.save();
+
+    // 2️⃣ Update alarms
+    final alarmBox = Hive.box<AlarmModel>('alarms');
+    final oldAlarms =
+        alarmBox.values.where((alarm) => alarm.medicineName == med.name).toList();
+    for (var alarm in oldAlarms) {
+      await AlarmService.deleteAlarm(alarm.id);
+      await alarmBox.delete(alarm.id);
+    }
+    for (var i = 0; i < doseTimes.length; i++) {
+      final parts = doseTimes[i].split(":");
+      final hour = int.parse(parts[0]);
+      final minute = int.parse(parts[1]);
+      final alarmId = DateTime.now().millisecondsSinceEpoch.remainder(100000);
+
+      final newAlarm = AlarmModel(
+        id: alarmId,
+        medicineName: med.name,
+        dosage: med.dosage,
+        title: med.name,
+        description: med.instructions?.isNotEmpty == true
+            ? med.instructions!
+            : "Time to take the medicine - ${med.name}",
+        hour: hour,
+        minute: minute,
+        isRepeating: _isRepeating,
+        isActive: _enableReminder,
+        selectedDays: List.from(_selectedDays),
+      );
+
+      await alarmBox.put(alarmId, newAlarm);
+      await AlarmService.saveAlarm(newAlarm);
     }
 
-    try {
-      final doseTimes = _doseTimes
-          .take(_timesPerDay!)
-          .map((t) =>
-              "${t!.hour.toString().padLeft(2, '0')}:${t.minute.toString().padLeft(2, '0')}")
-          .toList();
+    // 3️⃣ Update history entries
+    final historyBox = Hive.box<HistoryEntry>('historyBox');
+    final userBox = Hive.box<UserSettings>('settingsBox');
+    final userSettings = userBox.get('user');
+    if (userSettings == null) return;
+    final childId = userSettings.childId;
+    final now = DateTime.now();
 
-      // 1️⃣ Update Hive Medicine object
-      final med = widget.medicine;
-      med.name = _nameController.text.trim();
-      med.dosage = _dosageController.text.trim();
-      med.expiryDate = _selectedDate!;
-      med.dailyIntakeTimes = doseTimes;
-      med.totalQuantity = int.parse(_stockController.text.trim());
-      med.quantityLeft = int.parse(_stockController.text.trim());
-      med.refillThreshold = int.parse(_thresholdController.text.trim());
-      med.instructions = _instructionsController.text.trim();
-      await med.save();
+    for (var timeStr in doseTimes) {
+      final parts = timeStr.split(":");
+      final hour = int.parse(parts[0]);
+      final minute = int.parse(parts[1]);
+      final doseDateTime =
+          DateTime(now.year, now.month, now.day, hour, minute);
 
-      // 2️⃣ Update alarms
-      final alarmBox = Hive.box<AlarmModel>('alarms');
-      final oldAlarms = alarmBox.values
-          .where((alarm) => alarm.medicineName == med.name)
-          .toList();
-      for (var alarm in oldAlarms) {
-        await AlarmService.deleteAlarm(alarm.id);
-        await alarmBox.delete(alarm.id);
-      }
-      for (var i = 0; i < doseTimes.length; i++) {
-        final parts = doseTimes[i].split(":");
-        final hour = int.parse(parts[0]);
-        final minute = int.parse(parts[1]);
-        final alarmId = DateTime.now().millisecondsSinceEpoch.remainder(100000);
+      final doseKey = buildDoseKey(med.id, doseDateTime, timeStr, childId);
+      final isPast = doseDateTime.isBefore(now);
 
-        final newAlarm = AlarmModel(
-          id: alarmId,
+      if (historyBox.containsKey(doseKey)) {
+        final entry = historyBox.get(doseKey)!;
+
+        // ✅ Preserve taken/takenLate
+        if (entry.status == "taken" || entry.status == "takenLate") {
+          await historyBox.put(doseKey, entry);
+          continue;
+        }
+
+        if (isPast) {
+          entry.status = "missed";
+        } else {
+          entry.status = "pending";
+        }
+
+        entry.statusChanged = true;
+        entry.remoteId = null;
+        await historyBox.put(doseKey, entry);
+      } else {
+        // New entry
+        final newEntry = HistoryEntry(
+          date: doseDateTime,
           medicineName: med.name,
-          dosage: med.dosage,
-          title: med.name,
-          description: med.instructions?.isNotEmpty == true
-              ? med.instructions!
-              : "Time to take the medicine - ${med.name}",
-          hour: hour,
-          minute: minute,
-          isRepeating: _isRepeating,
-          isActive: _enableReminder,
-          selectedDays: List.from(_selectedDays),
+          medicineId: med.id,
+          status: isPast ? "missed" : "pending",
+          time: timeStr,
+          childId: childId,
         );
-
-        await alarmBox.put(alarmId, newAlarm);
-        await AlarmService.saveAlarm(newAlarm);
+        await historyBox.put(doseKey, newEntry);
       }
-
-      // 3️⃣ Update history entries
-      final historyBox = Hive.box<HistoryEntry>('historyBox');
-      final userBox = Hive.box<UserSettings>('settingsBox');
-      final userSettings = userBox.get('user');
-      if (userSettings == null) return;
-      final childId = userSettings.childId;
-      final now = DateTime.now();
-
-      // Reset future doses (after now) for this medicine
-      final futureKeys = historyBox.keys.where((key) {
-        final entry = historyBox.get(key);
-        if (entry == null) return false;
-        if (entry.medicineName != med.name) return false;
-        final entryDateTime = DateTime(
-          entry.date.year,
-          entry.date.month,
-          entry.date.day,
-          int.parse(entry.time?.split(':')[0] ?? '0'),
-          int.parse(entry.time?.split(':')[1] ?? '0'),
-        );
-        return entryDateTime.isAfter(now);
-      }).toList();
-
-      for (var key in futureKeys) {
-        historyBox.delete(key);
-      }
-
-    
-      for (var timeStr in doseTimes) {
-        final parts = timeStr.split(":");
-        final hour = int.parse(parts[0]);
-        final minute = int.parse(parts[1]);
-        final doseDateTime = DateTime(
-          now.year,
-          now.month,
-          now.day,
-          hour,
-          minute,
-        );
-
-        final doseKey = buildDoseKey(med.id, doseDateTime, timeStr, childId);
-
-        final isPast = doseDateTime.isBefore(now);
-
-        // if (historyBox.containsKey(doseKey)) {
-        //   final entry = historyBox.get(doseKey)!;
-
-        //   // Update status depending on time
-        //   if (entry.status == 'taken' || entry.status == 'takenLate') {
-        //     // Only keep taken statuses if the doseDateTime <= original taken time
-        //     if (doseDateTime.isAfter(now)) {
-        //       // new future dose → reset
-        //       entry.status = "pending";
-        //       entry.statusChanged = true;
-        //       entry.remoteId = null;
-        //     }
-        //   } else {
-        //     entry.status = isPast ? "missed" : "pending";
-        //     entry.statusChanged = true;
-        //     entry.remoteId = null;
-        //   }
-
-        //   entry.statusChanged = true;
-        //   entry.remoteId = null;
-        //   await historyBox.put(doseKey, entry);
-        // } else {
-        //   final newEntry = HistoryEntry(
-        //     date: doseDateTime,
-        //     medicineName: med.name,
-        //     medicineId: med.id,
-        //     status: isPast ? "missed" : "pending",
-        //     time: timeStr,
-        //     childId: childId,
-        //   );
-        //   await historyBox.put(doseKey, newEntry);
-        // }
-
-if (historyBox.containsKey(doseKey)) {
-  final entry = historyBox.get(doseKey)!;
-
-  if (doseDateTime.isAfter(now)) {
-    // Future dose → reset to pending, make clickable
-    entry.status = "pending";
-  } else {
-    // Past dose
-    if (entry.status != 'taken' && entry.status != 'takenLate') {
-      entry.status = "missed";
     }
-    // taken/takenLate in past → keep as is
-  }
 
-  entry.statusChanged = true;
-  entry.remoteId = null;
-  await historyBox.put(doseKey, entry);
-} else {
-  // New entry
-  final newEntry = HistoryEntry(
-    date: doseDateTime,
-    medicineName: med.name,
-    medicineId: med.id,
-    status: isPast ? "missed" : "pending",
-    time: timeStr,
-    childId: childId,
-  );
-  await historyBox.put(doseKey, newEntry);
+    // 4️⃣ Sync with Supabase
+    await Supabase.instance.client.from('medicine').update({
+      'name': med.name,
+      'dosage': med.dosage,
+      'expiry_date': med.expiryDate.toIso8601String(),
+      'daily_intake_times': med.dailyIntakeTimes,
+      'total_quantity': med.totalQuantity,
+      'quantity_left': med.quantityLeft,
+      'refill_threshold': med.refillThreshold,
+      'instructions': med.instructions,
+    }).eq('id', widget.medicineKey);
+
+    AppSnackbar.show(context,
+        message: "Medicine & Alarms Updated", success: true);
+    Navigator.pop(context);
+  } catch (e) {
+    print(e);
+    AppSnackbar.show(context, message: "Failed to Update: $e", success: false);
+  } finally {
+    setState(() => _isediting = false);
+  }
 }
-
-
-      }
-
-      // 4️⃣ Sync with Supabase
-      await Supabase.instance.client.from('medicine').update({
-        
-        'name': med.name,
-        'dosage': med.dosage,
-        'expiry_date': med.expiryDate.toIso8601String(),
-        'daily_intake_times': med.dailyIntakeTimes,
-        'total_quantity': med.totalQuantity,
-        'quantity_left': med.quantityLeft,
-        'refill_threshold': med.refillThreshold,
-        'instructions': med.instructions,
-      }).eq('id', widget.medicineKey);
-
-      AppSnackbar.show(context,
-          message: "Medicine & Alarms Updated", success: true);
-      Navigator.pop(context);
-    } catch (e) {
-      print(e);
-      AppSnackbar.show(context,
-          message: "Failed to Update: $e", success: false);
-    } finally {
-      setState(() => _isediting = false);
-    }
-  }
 
   @override
   Widget build(BuildContext context) {

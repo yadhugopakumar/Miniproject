@@ -16,53 +16,51 @@ class RefillTrackerPage extends StatefulWidget {
 }
 
 class _RefillTrackerPageState extends State<RefillTrackerPage> {
-
-void initState(){
-  _refreshData();
-}
+  void initState() {
+    _refreshData();
+  }
 
   final _supabase = Supabase.instance.client;
 
-
-Future<void> _refreshData() async {
-  try {
-    final userBox = Hive.box<UserSettings>('settingsBox');
-    final userSettings = userBox.get('user') as UserSettings?;
-    if (userSettings == null) {
-      AppSnackbar.show(context,
-          message: "No user settings found", success: false);
-      return;
-    }
-    final childId = userSettings.childId;
-    final box = Hive.box<Medicine>('medicinesBox');
-
-    // Push all Hive medicines to Supabase
-    for (final med in box.values) {
-      try {
-        await _supabase.from('medicine').upsert({
-          'id': med.id,
-          'child_id': childId,
-          'name': med.name,
-          'dosage': med.dosage,
-          'total_quantity': med.totalQuantity,
-          'quantity_left': med.quantityLeft,
-          'expiry_date': med.expiryDate.toIso8601String(),
-          'refill_threshold': med.refillThreshold,
-          'daily_intake_times': med.dailyIntakeTimes,
-        });
-      } catch (e) {
-        print("Supabase update failed for ${med.name}: $e");
+  Future<void> _refreshData() async {
+    try {
+      final userBox = Hive.box<UserSettings>('settingsBox');
+      final userSettings = userBox.get('user') as UserSettings?;
+      if (userSettings == null) {
+        AppSnackbar.show(context,
+            message: "No user settings found", success: false);
+        return;
       }
-    }
+      final childId = userSettings.childId;
+      final box = Hive.box<Medicine>('medicinesBox');
 
-    // AppSnackbar.show(context,
-    //     message: "Local changes synced to server", success: true);
-  } catch (e) {
-    print(e);
-    AppSnackbar.show(context,
-        message: "Failed to sync with server", success: false);
+      // Push all Hive medicines to Supabase
+      for (final med in box.values) {
+        try {
+          await _supabase.from('medicine').upsert({
+            'id': med.id,
+            'child_id': childId,
+            'name': med.name,
+            'dosage': med.dosage,
+            'total_quantity': med.totalQuantity,
+            'quantity_left': med.quantityLeft,
+            'expiry_date': med.expiryDate.toIso8601String(),
+            'refill_threshold': med.refillThreshold,
+            'daily_intake_times': med.dailyIntakeTimes,
+          });
+        } catch (e) {
+          print("Supabase update failed for ${med.name}: $e");
+        }
+      }
+
+      // AppSnackbar.show(context,
+      //     message: "Local changes synced to server", success: true);
+    } catch (e) {
+      print(e);
+      AppSnackbar.show(context,
+          message: "Failed to sync with server", success: false);
+    }
   }
-}
 
   @override
   Widget build(BuildContext context) {
@@ -196,40 +194,56 @@ Future<void> _refreshData() async {
                                   );
 
                                   if (added == true) {
+                                    // int addedQty = int.tryParse(
+                                    //         _stockController.text.trim()) ??
+                                    //     0;
+                                    // if (addedQty <= 0) return;
+
+                                    // final box =
+                                    //     Hive.box<Medicine>('medicinesBox');
+
+                                    // int newTotal = med.totalQuantity + addedQty;
+                                    // int newLeft = med.quantityLeft +
+                                    //     addedQty; // optional: increase quantityLeft too
+
+                                    // final updatedMedicine = Medicine(
+                                    //   id: med.id,
+                                    //   name: med.name,
+                                    //   dosage: med.dosage,
+                                    //   expiryDate: med.expiryDate,
+                                    //   dailyIntakeTimes: med.dailyIntakeTimes,
+                                    //   totalQuantity: newTotal,
+                                    //   quantityLeft: newLeft,
+                                    //   refillThreshold: med.refillThreshold,
+                                    // );
+
+                                    // // Update Hive
+                                    // await box.put(med.id, updatedMedicine);
+
+                                    // // Update Supabase
+                                    // await Supabase.instance.client
+                                    //     .from('medicine')
+                                    //     .update({
+                                    //   'total_quantity': newTotal,
+                                    //   'quantity_left': newLeft,
+                                    // }).eq('id', med.id);
                                     int addedQty = int.tryParse(
                                             _stockController.text.trim()) ??
                                         0;
                                     if (addedQty <= 0) return;
 
-                                    final box =
-                                        Hive.box<Medicine>('medicinesBox');
+                                    // ✅ Update the same Hive object instead of inserting a new one
+                                    med.totalQuantity += addedQty;
+                                    med.quantityLeft += addedQty;
+                                    await med.save(); // saves changes to Hive
 
-                                    int newTotal = med.totalQuantity + addedQty;
-                                    int newLeft = med.quantityLeft +
-                                        addedQty; // optional: increase quantityLeft too
-
-                                    final updatedMedicine = Medicine(
-                                      id: med.id,
-                                      name: med.name,
-                                      dosage: med.dosage,
-                                      expiryDate: med.expiryDate,
-                                      dailyIntakeTimes: med.dailyIntakeTimes,
-                                      totalQuantity: newTotal,
-                                      quantityLeft: newLeft,
-                                      refillThreshold: med.refillThreshold,
-                                    );
-
-                                    // Update Hive
-                                    await box.put(med.id, updatedMedicine);
-
-                                    // Update Supabase
+                                    // ✅ Update Supabase
                                     await Supabase.instance.client
                                         .from('medicine')
                                         .update({
-                                      'total_quantity': newTotal,
-                                      'quantity_left': newLeft,
+                                      'total_quantity': med.totalQuantity,
+                                      'quantity_left': med.quantityLeft,
                                     }).eq('id', med.id);
-
                                     AppSnackbar.show(context,
                                         message: "Stock updated successfully",
                                         success: true);
